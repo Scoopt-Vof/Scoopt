@@ -1,0 +1,36 @@
+# Scoopt back end — request collection
+# Install the VS Code extension "REST Client" (humao.rest-client), then click
+# the little "Send Request" link that appears above each request below.
+# Start the server first with: npm run dev
+
+@host = http://localhost:3001
+
+### health
+GET {{host}}/health
+
+### search — happy path
+GET {{host}}/api/search?q=Kalenji
+
+### search — too short, expect 400
+GET {{host}}/api/search?q=a
+
+### search — no matches, expect 200 and []
+GET {{host}}/api/search?q=zzzznotathing
+
+### product — happy path
+GET {{host}}/api/product/1
+
+### product — missing, expect 404
+GET {{host}}/api/product/999999
+
+### product — rubbish id, expect 404 not 500
+GET {{host}}/api/product/abc
+
+### price history
+GET {{host}}/api/price-history/1
+
+### track
+POST {{host}}/api/track
+Content-Type: application/json
+
+{ "event": "product_view", "productId": "1" }
