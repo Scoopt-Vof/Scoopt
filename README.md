@@ -1,183 +1,208 @@
-# Scoopt — Next.js starter scaffold
+<p align="center">
+  <img src="logo.svg" width="200px" align="center" alt="Zod logo" />
+  <h1 align="center">Zod</h1>
+  <p align="center">
+    TypeScript-first schema validation with static type inference
+    <br/>
+    by <a href="https://x.com/colinhacks">@colinhacks</a>
+  </p>
+</p>
+<br/>
 
-This is the real starting point for the Scoopt website, built on the structure
-you and Larry agreed. It runs entirely on **fake data** right now, so the whole
-frontend works before the real backend exists. That is deliberate — it is how
-you two build in parallel without blocking each other.
+<p align="center">
+<a href="https://github.com/colinhacks/zod/actions?query=branch%3Amaster"><img src="https://github.com/colinhacks/zod/actions/workflows/test.yml/badge.svg?event=push&branch=master" alt="Zod CI status" /></a>
+<a href="https://opensource.org/licenses/MIT" rel="nofollow"><img src="https://img.shields.io/github/license/colinhacks/zod" alt="License"></a>
+<a href="https://www.npmjs.com/package/zod" rel="nofollow"><img src="https://img.shields.io/npm/dw/zod.svg" alt="npm"></a>
+<a href="https://discord.gg/KaSRdyX2vc" rel="nofollow"><img src="https://img.shields.io/discord/893487829802418277?label=Discord&logo=discord&logoColor=white" alt="discord server"></a>
+<a href="https://github.com/colinhacks/zod" rel="nofollow"><img src="https://img.shields.io/github/stars/colinhacks/zod" alt="stars"></a>
+</p>
 
----
+<div align="center">
+  <a href="https://zod.dev/api">Docs</a>
+  <span>&nbsp;&nbsp;•&nbsp;&nbsp;</span>
+  <a href="https://discord.gg/RcG33DQJdf">Discord</a>
+  <span>&nbsp;&nbsp;•&nbsp;&nbsp;</span>
+  <a href="https://twitter.com/colinhacks">𝕏</a>
+  <span>&nbsp;&nbsp;•&nbsp;&nbsp;</span>
+  <a href="https://bsky.app/profile/zod.dev">Bluesky</a>
+  <br />
+</div>
 
-## The USP: the personalised shopping experience
+<br/>
+<br/>
 
-Scoopt's differentiator isn't the price comparison (anyone can copy that) — it's
-the **shopper profile** that learns what you want and gives informed buying
-advice. This scaffold has the full experience working on the frontend:
+<h2 align="center">Featured sponsor: Jazz</h2>
 
-- **`/signup`** — a short questionnaire (categories → budget → priority →
-  per-category detail like running distance/level). Multi-step to reduce drop-off.
-- **`/profile`** — shows what Scoopt learned, plus personalised top picks with a
-  match % and *why each fits you*.
-- **On every product** — a "Voor jou" panel: a match score and the reasons this
-  product suits this shopper (or an invite to make a profile if they haven't).
-- **On category pages** — products are **re-ranked** to the shopper, with the
-  same "why it fits" reasons.
+<div align="center">
+  <a href="https://jazz.tools/?utm_source=zod">
+    <picture width="85%" >
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/garden-co/jazz/938f6767e46cdfded60e50d99bf3b533f4809c68/homepage/homepage/public/Zod%20sponsor%20message.png">
+      <img alt="jazz logo" src="https://raw.githubusercontent.com/garden-co/jazz/938f6767e46cdfded60e50d99bf3b533f4809c68/homepage/homepage/public/Zod%20sponsor%20message.png" width="85%">
+    </picture>
+  </a>
+  <br/>
+  <p><sub>Learn more about <a target="_blank" rel="noopener noreferrer" href="mailto:sponsorship@colinhacks.com">featured sponsorships</a></sub></p>
+</div>
 
-How it works today: the profile is saved in the browser (`lib/profile.ts`) and
-the ranking is computed on the client. The rules are deliberately simple and
-explainable — budget fit, stated priority (price / quality / newest), and
-per-category detail. **Later, Larry moves `personalise()` to the backend** and
-feeds it *observed* behaviour (what they viewed/bought) as well as the stated
-questionnaire — the `PersonalisedProduct` shape stays identical, so the UI
-doesn't change. The `ShopperProfile` type already has the `viewedProductIds` /
-`purchasedProductIds` fields waiting for that.
+<br/>
+<br/>
+<br/>
 
----
+### [Read the docs →](https://zod.dev/api)
 
-### Observed behaviour (stated + observed)
+<br/>
+<br/>
 
-The profile also learns from what shoppers **do**, not only what they said:
+## What is Zod?
 
-- `components/TrackView.tsx` records a `view_product` event on every product page.
-- `components/PriceLane.tsx` records a `click_out` event when they go to a store.
-- These feed the ranking: a product they clicked out on gets a small boost (and
-  the reason "Je toonde hier interesse in"); something they already bought is
-  demoted; a category they browse a lot nudges its products up.
-- `/profile` shows an **"Onlangs bekeken"** (recently viewed) strip as proof the
-  signal is captured — this even works before they make a profile.
+Zod is a TypeScript-first validation library. Define a schema and parse some data with it. You'll get back a strongly typed, validated result.
 
-**The seam (keeps the frontend/backend split clean):** all tracking goes through
-one function, `track()` in `lib/track.ts`. Today it writes events to the browser.
-There's a clearly-marked **SWAP POINT** inside `track()` — when Larry's backend
-is ready, only that block changes (localStorage → `POST /api/track`). Nothing
-else in the frontend moves, because everything depends on the `TrackEvent` /
-`ObservedSignals` shapes in the contract, not on where events are stored. So:
-**you build the detection + wiring; Larry builds the persistence; the contract is
-the agreed line between you.**
+```ts
+import * as z from "zod/v4";
 
----
+const User = z.object({
+  name: z.string(),
+});
 
-## The smart basket (Scoopt's revolutionary basket)
+// some untrusted data...
+const input = {
+  /* stuff */
+};
 
-The basket answers a question no mainstream NL comparison site answers well:
-**"What is the genuinely cheapest way to buy ALL of this — even if that means
-buying from more than one store — once delivery is counted?"**
+// the parsed result is validated and type safe!
+const data = User.parse(input);
 
-- `lib/smartBasket.ts` computes two honest plans and recommends the real winner:
-  best single store vs a smart split (each item at its cheapest store, every
-  store's delivery fee added in).
-- Crucially it is **honest**: when splitting would scatter the order and the
-  extra delivery wipes out the item savings, it says *"just buy it all at X."*
-  That honesty is the brand — it's why the ranking can be trusted.
-- `lib/basket.ts` holds the basket (browser-persisted) and emits `add_to_basket`
-  events through the tracking seam, so the basket also feeds the profile.
-- `app/basket/page.tsx` shows the verdict banner, both plans side by side, and
-  the per-item "cheapest at" store.
-
-Delivery rules (a flat fee waived above a threshold) live in `lib/fakeData.ts`
-for now — Larry supplies real ones later; the shapes hold.
-
-## Accounts &amp; sign-in
-
-Sign-in / sign-up screens live at `/account`: email + password plus Google/Apple
-buttons. New sign-ups flow into the questionnaire. The whole experience works now
-on a FAKE signed-in account stored in the browser (`lib/auth.ts`), with clearly
-marked SWAP POINTs where Larry wires real auth later.
-
-Important split: the frontend owns the SCREENS and the non-sensitive `Account`
-record. Real credential checking, sessions, and Google/Apple OAuth are backend
-(Larry's) — passwords are NEVER stored on the frontend, even in the fake version.
-
-The profile page has a "complete your profile" section with four progressive
-insight areas (sizing, timing, values, life context). Each explains what Scoopt
-can tell the shopper once added — turning profile-building into a value exchange
-rather than a long form. Sign-up stays short; these deepen over time.
-
-## What's in here
-
-```
-scoopt/
-  contract/types.ts     ← THE SEAM. The data shapes both halves agree on.
-  lib/
-    fakeData.ts          ← temporary stand-in for Larry's backend
-    api.ts               ← the ONE place the frontend calls the API
-  app/
-    layout.tsx           ← header/footer wrapper
-    page.tsx             ← home page (hero + 3 category cards)
-    globals.css          ← the Scoopt look, carried from the prototype
-    category/[cat]/       ← a category page (lists subcategories + products)
-    product/[id]/         ← a product page (the price-comparison lane)
-    api/                  ← the 4 endpoints from the contract
-  components/
-    PriceLane.tsx         ← the per-store price bars
+// so you can use it with confidence :)
+console.log(data.name);
 ```
 
-The golden rule: **the frontend never touches the database.** It only ever
-calls the functions in `lib/api.ts`, which hit the `app/api/*` routes, which
-today read from `lib/fakeData.ts`. When Larry's backend is ready, only the
-*insides* of those API routes change — the shapes in `contract/types.ts` stay
-identical, so the frontend keeps working untouched.
+<br/>
 
----
+## Features
 
-## Running it for the first time (total beginner)
+- Zero external dependencies
+- Works in Node.js and all modern browsers
+- Tiny: `2kb` core bundle (gzipped)
+- Immutable API: methods return a new instance
+- Concise interface
+- Works with TypeScript and plain JS
+- Built-in JSON Schema conversion
+- Extensive ecosystem
 
-You need **Node.js** installed. If you don't have it:
+<br/>
 
-1. Go to https://nodejs.org and install the **LTS** version.
-2. Check it worked — open a terminal and run:
-   ```
-   node --version
-   ```
-   You should see a version number (v20 or higher).
+## Installation
 
-Then, in a terminal, from inside this folder:
-
-```
-npm install        # downloads Next.js and React (one-time, takes a minute)
-npm run dev        # starts the local site
+```sh
+npm install zod
 ```
 
-Open **http://localhost:3000** in your browser. You'll see the Scoopt home
-page. Click a category → a subcategory's products → a product to see the
-price-comparison lane. All of it is running on the fake data.
+<br/>
 
-Press `Ctrl + C` in the terminal to stop it.
+## Basic usage
 
----
+Before you can do anything else, you need to define a schema. For the purposes of this guide, we'll use a simple object schema.
 
-## How you and Larry split this
+```ts
+import * as z from "zod/v4";
 
-- **You (frontend):** everything in `app/` (except `app/api/`), `components/`,
-  and `lib/api.ts`. Make the pages look and work well against the fake data.
-- **Larry (backend):** `app/api/*` and, later, a real database. His job is to
-  make those routes return the same shapes `lib/fakeData.ts` returns now, but
-  from real retailer feeds instead.
-- **Shared, agreed together:** `contract/types.ts`. Never change a shape here
-  without telling the other person — it's the seam that keeps both halves fitting.
-
----
-
-## Git: how to work in parallel without collisions
-
-```
-git checkout main && git pull        # start from the latest shared code
-git checkout -b feat/my-piece         # your own branch
-#   ... build, then ...
-git add . && git commit -m "describe what you did"
-git push -u origin feat/my-piece      # publish your branch
-#   open a Pull Request on GitHub, the other reviews, then merge
+const Player = z.object({
+  username: z.string(),
+  xp: z.number(),
+});
 ```
 
-Merge **small and often** (every few days). Two branches kept apart for weeks
-cause painful conflicts; branches merged every few days barely conflict at all.
+### Parsing data
 
----
+Given any Zod schema, use `.parse` to validate an input. If it's valid, Zod returns a strongly-typed _deep clone_ of the input.
 
-## What's intentionally NOT here yet (later phases)
+```ts
+Player.parse({ username: "billie", xp: 100 });
+// => returns { username: "billie", xp: 100 }
+```
 
-- Real prices (Larry's feed ingestion + product matching)
-- User accounts, saved baskets, price alerts
-- The full editorial / buying-guide layer
-- Anything to do with checkout
+**Note** — If your schema uses certain asynchronous APIs like `async` [refinements](#refine) or [transforms](#transform), you'll need to use the `.parseAsync()` method instead.
 
-Keep the catalogue small and the shapes stable, and the rest grows from here.
+```ts
+const schema = z.string().refine(async (val) => val.length <= 8);
+
+await schema.parseAsync("hello");
+// => "hello"
+```
+
+### Handling errors
+
+When validation fails, the `.parse()` method will throw a `ZodError` instance with granular information about the validation issues.
+
+```ts
+try {
+  Player.parse({ username: 42, xp: "100" });
+} catch (err) {
+  if (err instanceof z.ZodError) {
+    err.issues;
+    /* [
+      {
+        expected: 'string',
+        code: 'invalid_type',
+        path: [ 'username' ],
+        message: 'Invalid input: expected string'
+      },
+      {
+        expected: 'number',
+        code: 'invalid_type',
+        path: [ 'xp' ],
+        message: 'Invalid input: expected number'
+      }
+    ] */
+  }
+}
+```
+
+To avoid a `try/catch` block, you can use the `.safeParse()` method to get back a plain result object containing either the successfully parsed data or a `ZodError`. The result type is a [discriminated union](https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions), so you can handle both cases conveniently.
+
+```ts
+const result = Player.safeParse({ username: 42, xp: "100" });
+if (!result.success) {
+  result.error; // ZodError instance
+} else {
+  result.data; // { username: string; xp: number }
+}
+```
+
+**Note** — If your schema uses certain asynchronous APIs like `async` [refinements](#refine) or [transforms](#transform), you'll need to use the `.safeParseAsync()` method instead.
+
+```ts
+const schema = z.string().refine(async (val) => val.length <= 8);
+
+await schema.safeParseAsync("hello");
+// => { success: true; data: "hello" }
+```
+
+### Inferring types
+
+Zod infers a static type from your schema definitions. You can extract this type with the `z.infer<>` utility and use it however you like.
+
+```ts
+const Player = z.object({
+  username: z.string(),
+  xp: z.number(),
+});
+
+// extract the inferred type
+type Player = z.infer<typeof Player>;
+
+// use it in your code
+const player: Player = { username: "billie", xp: 100 };
+```
+
+In some cases, the input & output types of a schema can diverge. For instance, the `.transform()` API can convert the input from one type to another. In these cases, you can extract the input and output types independently:
+
+```ts
+const mySchema = z.string().transform((val) => val.length);
+
+type MySchemaIn = z.input<typeof mySchema>;
+// => string
+
+type MySchemaOut = z.output<typeof mySchema>; // equivalent to z.infer<typeof mySchema>
+// number
+```

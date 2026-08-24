@@ -1,3 +1,4 @@
-import z4 from "./classic/index.cjs";
-export * from "./classic/index.cjs";
-export default z4;
+import * as z from "./v3/external.cjs";
+export * from "./v3/external.cjs";
+export { z };
+export default z;
