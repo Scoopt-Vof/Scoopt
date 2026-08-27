@@ -1,7 +1,7 @@
 # Scoopt back end — Decathlon trial run
 
 A complete, working, single-retailer vertical slice: database → ingestion → API →
-tests. Everything runs. 29 tests pass. Nothing here is a sketch.
+tests. Everything runs. Nothing here is a sketch.
 
 **Read `DECATHLON-NOTE.md` first** — it explains why the source adapter reads a
 stand-in catalogue rather than decathlon.nl, and what to change when a licensed
@@ -25,7 +25,7 @@ That's it. No Docker, no Python, no VPS for this trial.
 
 ### 1. Put the folder somewhere sensible
 
-Unzip `scoopt-backend.zip` to wherever you keep code — e.g. `~/code/scoopt-backend`.
+Clone the repo (or open the clone you already have) and work in `backend/`.
 Open that folder in VS Code (**File → Open Folder**).
 
 ### 2. Create the Supabase project
@@ -69,7 +69,7 @@ Open the VS Code terminal (**Terminal → New Terminal**) and run these in order
 npm install        # install dependencies (~30 seconds)
 npm run db:migrate # create the tables in Supabase
 npm run ingest     # load the catalogue — should print "15 seen, 15 offers"
-npm test           # 29 tests, all should pass
+npm test           # needs TEST_DATABASE_URL - see "Running the tests"
 npm run dev        # start the API on http://localhost:3001
 ```
 
@@ -87,6 +87,23 @@ Run `npm run ingest` a few more times and the price history builds up. Set
 `SIMULATE_PRICE_DRIFT=1` in `.env` first if you want the prices to actually move
 so the chart has something to show.
 
+### Running the tests
+
+The suite empties every table before it runs, so it must never point at a
+database you care about. It reads `TEST_DATABASE_URL` — not `DATABASE_URL` —
+and refuses to start if that is missing, or identical to the real one.
+
+Make a throwaway database (a second free Supabase project called `scoopt-test`
+is the quickest route) and add it to `.env`:
+
+```
+TEST_DATABASE_URL=postgresql://postgres.xxxx:PASSWORD@aws-0-eu-central-1.pooler.supabase.com:5432/postgres
+```
+
+Then `npm test` behaves as it always did, against that database instead.
+
+---
+
 ### 6. Look at the data
 
 Supabase dashboard → **Table Editor**. You'll see `product`, `offer`,
@@ -98,6 +115,8 @@ Supabase dashboard → **Table Editor**. You'll see `product`, `offer`,
 
 ```
 db/001_schema.sql          the database. money as integer cents, price history append-only
+db/002_contract_fields.sql the extra fields the front-end contract needs
+db/003_rls.sql             row level security, so Supabase's public API exposes nothing
 src/contract/types.ts      the shapes the API returns  ← replaced by Josh's contract later
 src/contract/schemas.ts    Zod mirrors + the invariants written down as code
 src/sources/types.ts       the RetailerSource interface  ← THE SWAP POINT
@@ -105,8 +124,11 @@ src/sources/decathlon.ts   the Decathlon adapter  ← the one file a real feed r
 src/ingest/run.ts          acquire → archive → normalise → match → store
 src/api/queries.ts         all the SQL
 src/api/handlers.ts        Request → Response functions  ← these drop into Next.js as-is
+src/api/contract-*.ts      the same endpoints in Josh's exact shapes (npm run serve)
+src/contract-server.ts     dev server for those contract shapes
 src/server.ts              a tiny dev server so you can curl it without Next.js
-tests/                     29 tests: unit, integration, and data-quality
+tests/                     unit, integration and data-quality tests
+tests/setup.ts             refuses to run the suite against your real database
 data/                      the stand-in Decathlon catalogue
 raw/                       archived payloads, one per ingest run
 ```
@@ -150,6 +172,7 @@ matched; the API returns contract-valid shapes; the data-quality checks fire.
 commercial question, not a technical one, and it stays the long pole. Nothing in
 this codebase gets you closer to it except that it's ready when approval lands.
 
-**Not built yet** (deliberately out of scope for a single-retailer trial):
-`/api/category`, `/api/basket/*`, `/api/personalise`, auth, and matching tiers 2
-and 3 — brand+MPN and fuzzy title only start mattering with a second retailer.
+**Not built yet:** auth, and matching tiers 2 and 3 — brand+MPN and fuzzy title
+only start mattering once a second real retailer is in play. `/api/category`,
+`/api/basket/*` and `/api/personalise` now exist in the contract layer
+(`src/api/contract-handlers.ts`), served by `npm run serve`.
