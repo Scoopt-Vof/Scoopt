@@ -81,6 +81,8 @@ function toOffer(r: OfferRow): Offer {
     // call, and the reason the DB ranks on price+shipping while the contract
     // can only rank on one number.
     price: toEuros(r.price_cents + r.shipping_cents),
+    // Safe because ingest rejects non-euro offers and offersFor() filters them
+    // out: the contract's Offer.currency is the literal "EUR".
     currency: 'EUR',
     inStock: r.in_stock,
     url: r.product_url,
@@ -97,6 +99,10 @@ async function offersFor(productDbIds: string[]): Promise<Map<string, Offer[]>> 
       join retailer r on r.id = o.retailer_id and r.is_active
       join product  p on p.id = o.product_id
      where o.product_id = any(${productDbIds}::bigint[])
+      -- The contract's Offer.currency is the literal "EUR", and ranking adds
+      -- raw cents with no conversion. Ingest refuses non-euro rows; this is the
+      -- second lock, so a row ingested before that check cannot reach the API.
+      and o.currency = 'EUR'
      order by (o.price_cents + o.shipping_cents) asc, r.slug asc
   `;
   const map = new Map<string, Offer[]>();
@@ -222,16 +228,16 @@ export async function compareBasket(req: BasketRequest): Promise<BasketResult> {
 
   const totals: StoreBasketTotal[] = stores
     .map((store) => {
-      let total = 0;
+      let totalCents = 0;
       const missing: string[] = [];
       for (const item of items) {
         const offer = item.offers.find((o) => o.store === store && o.inStock);
-        if (offer) total += offer.price;
+        if (offer) totalCents += Math.round(offer.price * 100);
         else missing.push(item.productName);
       }
       return {
         store,
-        total: Math.round(total * 100) / 100,
+        total: totalCents / 100,
         complete: items.length > 0 && missing.length === 0,
         missing,
       };
