@@ -167,9 +167,11 @@ function toRawOffer(item: EbayItem, query: string): RawOffer | null {
     ean: gtin,
     brand: item.brand ?? item.product?.brand ?? 'Onbekend',
     title: item.title,
-    // eBay's categoryPath is a long breadcrumb; the seeding query is a far more
-    // useful category for a sports comparison site than "Sporting Goods|...".
-    category: query,
+    // The contract allows exactly home | sport | tech. The search phrase used
+    // to land here and was silently rewritten to 'sport' downstream, which hid
+    // the mismatch; it belongs in subcategory, where it is genuinely useful.
+    category: process.env.EBAY_CATEGORY ?? 'sport',
+    subcategory: query,
     priceCents: Math.round(priceValue * 100),
     shippingCents: Number.isFinite(shippingValue) ? Math.round(shippingValue * 100) : 0,
     currency: item.price?.currency ?? 'EUR',
