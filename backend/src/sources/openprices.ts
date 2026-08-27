@@ -141,7 +141,10 @@ function toRawOffer(p: OpenPrice, retailerName: string): RawOffer | null {
     ean: p.product_code,
     brand: brands.split(',')[0]?.trim() || 'Onbekend',
     title,
-    category: p.product?.categories_tags?.[0]?.replace(/^[a-z]{2}:/, '') ?? 'boodschappen',
+    // The contract allows exactly home | sport | tech, and an Open Food Facts
+    // tag is none of those - it belongs in subcategory.
+    category: process.env.OPENPRICES_CATEGORY ?? 'home',
+    subcategory: p.product?.categories_tags?.[0]?.replace(/^[a-z]{2}:/, '') ?? 'boodschappen',
     priceCents: Math.round(p.price * 100),
     shippingCents: 0,
     currency: p.currency ?? 'EUR',
