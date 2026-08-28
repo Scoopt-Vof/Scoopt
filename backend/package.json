@@ -6,19 +6,19 @@
   "description": "Scoopt back end — single-retailer vertical slice (Decathlon). Trial run.",
   "scripts": {
     "fixture": "node scripts/make-fixture.mjs",
-    "db:migrate": "node scripts/migrate.mjs",
-    "ingest": "tsx src/ingest/run.ts",
-    "dev": "tsx watch src/server.ts",
+    "db:migrate": "node --env-file=.env scripts/migrate.mjs",
+    "ingest": "tsx --env-file=.env src/ingest/run.ts",
+    "dev": "tsx watch --env-file=.env src/server.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "ingest:list": "tsx src/ingest/run.ts --list",
-    "ingest:all": "tsx src/ingest/run.ts all",
+    "ingest:list": "tsx --env-file=.env src/ingest/run.ts --list",
+    "ingest:all": "tsx --env-file=.env src/ingest/run.ts all",
     "mock": "tsx mock/standalone/server.ts",
     "mock:build": "node mock/generate-fakedata.mjs && cp mock/out/fakeData.ts mock/verify/lib/fakeData.ts && sed \"s|from \\\"@/contract/types\\\"|from \\\"./types\\\"|\" mock/out/fakeData.ts > mock/standalone/fakeData.ts",
     "mock:check": "tsc -p mock/verify --noEmit && tsx mock/verify/check.ts",
-    "seed": "tsx src/ingest/run.ts decathlon-nl jdsports-nl bever-nl intersport-nl bol-com",
-    "serve": "tsx src/contract-server.ts",
+    "seed": "tsx --env-file=.env src/ingest/run.ts decathlon-nl jdsports-nl bever-nl intersport-nl bol-com",
+    "serve": "tsx --env-file=.env src/contract-server.ts",
     "trial": "npm run db:migrate && npm run seed && npm run serve",
     "trial:verify": "tsx mock/verify/equivalence.ts"
   },
@@ -31,5 +31,9 @@
     "tsx": "^4.23.12",
     "typescript": "^5.7.3",
     "vitest": "^2.1.8"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "esbuild@0.21.5": true
   }
 }
