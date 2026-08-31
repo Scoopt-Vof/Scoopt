@@ -32,8 +32,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </header>
         <main className="site-main">{children}</main>
         <footer className="site-footer">
-          Scoopt · price-comparison prototype · sample data
-        </footer>
+        <Link href="/privacy">Privacy</Link>
+        <Link href="/cookies">Cookies</Link>
+        <p className="footer-note">
+          Scoopt earns a commission when you buy through us, at no extra cost to
+          you. It never affects what we recommend or how we rank offers.
+        </p>
+      </footer>
       </body>
     </html>
   );
