@@ -103,7 +103,11 @@ function toRawOffer(p: BestBuyProduct, term: string): RawOffer | null {
     ean: p.upc ?? null, // 12-digit UPC-A; normaliseEan() pads it to EAN-13
     brand: p.manufacturer ?? 'Onbekend',
     title: p.name,
-    category: p.categoryPath?.at(-1)?.name ?? term,
+    // The contract allows exactly home | sport | tech. Best Buy is electronics,
+    // and its own breadcrumb makes a much better subcategory than a category.
+    // Its prices are USD, so ingest rejects these rows regardless.
+    category: process.env.BESTBUY_CATEGORY ?? 'tech',
+    subcategory: p.categoryPath?.at(-1)?.name ?? term,
     priceCents: Math.round(price * 100),
     shippingCents: Math.round((p.shippingCost ?? 0) * 100),
     currency: 'USD',

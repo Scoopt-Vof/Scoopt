@@ -4,7 +4,6 @@ import { sql } from '../lib/db';
 import { isValidEan13, normaliseEan } from '../lib/ean';
 import { isSanePrice } from '../lib/money';
 import type { RetailerSource, RawOffer } from '../sources/types';
-import { DecathlonSource } from '../sources/decathlon';
 import { resolveSources, printSources } from '../sources/registry';
 
 /**
@@ -166,6 +165,10 @@ export async function ingest(source: RetailerSource): Promise<IngestSummary> {
 function validate(raw: RawOffer): string | null {
   if (!isValidEan13(raw.ean)) return 'ean_invalid';
   if (!isSanePrice(raw.priceCents)) return 'price_out_of_range';
+  // Offers are ranked on raw cents with no conversion anywhere, so a non-euro
+  // offer would be compared against euro ones as if the numbers meant the same
+  // thing. Refuse it rather than publish a confidently wrong "cheapest".
+  if ((raw.currency ?? 'EUR').toUpperCase() !== 'EUR') return 'currency_not_eur';
   if (!raw.title?.trim()) return 'missing_title';
   if (!raw.productUrl?.startsWith('http')) return 'bad_url';
   return null;

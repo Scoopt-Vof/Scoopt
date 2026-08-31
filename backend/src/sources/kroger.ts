@@ -139,7 +139,11 @@ function toRawOffer(p: KrogerProduct, term: string): RawOffer | null {
     ean: p.upc,
     brand: p.brand ?? 'Kroger',
     title: p.description,
-    category: p.categories?.[0] ?? term,
+    // The contract allows exactly home | sport | tech, and Kroger's own
+    // grocery categories are none of those. Its prices are USD too, so ingest
+    // rejects them - this just keeps the shape right if that ever changes.
+    category: process.env.KROGER_CATEGORY ?? 'home',
+    subcategory: p.categories?.[0] ?? term,
     priceCents: Math.round(price * 100),
     shippingCents: 0,
     currency: 'USD',

@@ -18,10 +18,18 @@ export interface RawOffer {
   ean?: string | null;
   brand: string;
   title: string;
+  /**
+   * The front-end contract allows exactly 'home' | 'sport' | 'tech'. Anything
+   * else is quietly rewritten to 'sport' further down, so a search phrase or a
+   * retailer's own breadcrumb belongs in `subcategory`, never here.
+   */
   category: string;
   /** Integer cents. Adapters convert; nothing downstream ever sees euros. */
   priceCents: number;
   shippingCents?: number;
+  /** ISO 4217. Ingest refuses anything that is not 'EUR' - nothing in this
+   *  codebase converts between currencies, so a non-euro row would be ranked
+   *  against euro ones as if the numbers matched. */
   currency?: string;
   inStock: boolean;
   productUrl: string;

@@ -41,7 +41,10 @@ export async function getProduct(id: string): Promise<ProductWithOffers | null> 
            o.in_stock, o.product_url, o.last_seen_at
       from offer o
       join retailer r on r.id = o.retailer_id
-     where o.product_id = ${productId} and r.is_active
+     -- Totals add raw cents with no conversion, so a non-euro offer would be
+     -- ranked against euro ones as if the numbers matched. Ingest refuses them;
+     -- this keeps any row stored before that check out of the comparison.
+     where o.product_id = ${productId} and r.is_active and o.currency = 'EUR'
      order by (o.price_cents + o.shipping_cents) asc, r.slug asc
   `;
 
@@ -75,7 +78,7 @@ export async function searchProducts(q: string, limit = 24): Promise<Product[]> 
       from product p
       left join (
              offer o join retailer r on r.id = o.retailer_id and r.is_active
-           ) on o.product_id = p.id
+           ) on o.product_id = p.id and o.currency = 'EUR'
      where p.status = 'published'
        and (p.title ilike ${'%' + term + '%'} or p.brand ilike ${'%' + term + '%'})
      group by p.id
@@ -121,7 +124,7 @@ export async function getPriceHistory(id: string, days = 30): Promise<PriceHisto
 
   const [current] = await sql<{ current_min: number | null }[]>`
     select min(price_cents + shipping_cents)::int as current_min
-      from offer where product_id = ${productId}
+      from offer where product_id = ${productId} and currency = 'EUR'
   `;
 
   const observed = points.map((p) => p.priceCents);

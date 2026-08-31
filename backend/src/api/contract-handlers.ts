@@ -87,5 +87,15 @@ export async function personaliseHandler(req: Request): Promise<Response> {
 }
 
 export function corsPreflight(): Response {
-  return json({}, 204);
+  // 204 is a null-body status: passing a body here throws a TypeError,
+  // which contract-server.ts turns into a 500, so every preflight fails.
+  return new Response(null, {
+    status: 204,
+    headers: {
+      'access-control-allow-origin': '*',
+      'access-control-allow-headers': 'content-type',
+      'access-control-allow-methods': 'GET,POST,OPTIONS',
+      'access-control-max-age': '86400',
+    },
+  });
 }
