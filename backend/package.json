@@ -6,6 +6,7 @@
   "description": "Scoopt back end — single-retailer vertical slice (Decathlon). Trial run.",
   "scripts": {
     "fixture": "node scripts/make-fixture.mjs",
+    "start": "tsx src/server.ts",
     "db:migrate": "node --env-file=.env scripts/migrate.mjs",
     "ingest": "tsx --env-file=.env src/ingest/run.ts",
     "dev": "tsx watch --env-file=.env src/server.ts",
