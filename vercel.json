@@ -1,1 +1,17 @@
-{"$schema":"https://openapi.vercel.sh/vercel.json","services":{"frontend":{"root":"frontend","framework":"nextjs"},"backend":{"root":"backend","runtime":"node","entrypoint":"src/server.ts","routes":[{"src":"/api/backend/(.*)","transforms":[{"type":"request.path","op":"set","args":"/api/$1"}]},{"src":"/api/backend/health","transforms":[{"type":"request.path","op":"set","args":"/health"}]}]}},"rewrites":[{"source":"/api/backend/(.*)","destination":{"service":"backend"}},{"source":"/(.*)","destination":{"service":"frontend"}}]}
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "frontend": {
+      "root": "frontend",
+      "framework": "nextjs"
+    },
+    "backend": {
+      "root": "backend",
+      "runtime": "node",
+      "entrypoint": "src/server.ts"
+    }
+  },
+  "rewrites": [
+    { "source": "/(.*)", "destination": { "service": "frontend" } }
+  ]
+}
