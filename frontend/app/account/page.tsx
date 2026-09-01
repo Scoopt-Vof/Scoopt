@@ -1,17 +1,31 @@
 "use client";
-// Sign-in / sign-up screen. Email + password (real Supabase Auth), plus
-// Google/Apple buttons (still fake — see lib/auth.ts SWAP POINT). New
+// Sign-in / sign-up screen. Email + password via real Supabase Auth. New
 // sign-ups must confirm their email before continuing into the questionnaire.
 // Returning shoppers on a new device have their saved profile pulled from
 // Supabase (see lib/profile.ts) rather than being sent through the quiz again.
+//
+// Google/Apple sign-in isn't wired up yet — see lib/auth.ts's
+// signInWithProvider SWAP POINT for what real OAuth needs before those
+// buttons come back.
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-  signInWithEmail, signUpWithEmail, signInWithProvider, subscribe,
-} from "@/lib/auth";
+import { signInWithEmail, signUpWithEmail, subscribe } from "@/lib/auth";
 import { loadProfileAsync } from "@/lib/profile";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Keep this in sync with the "Minimum password length" / "Password
+// Requirements" setting in the Supabase dashboard (Authentication → Sign In
+// / Providers → Email) — the point is to catch a weak password here, before
+// the round-trip to Supabase, not to duplicate a different rule than it.
+function passwordIssue(pw: string): string | null {
+  if (pw.length < 8) return "At least 8 characters";
+  if (!/[a-zA-Z]/.test(pw)) return "Include at least one letter";
+  if (!/[0-9]/.test(pw)) return "Include at least one number";
+  return null;
+}
 
 export default function AccountPage() {
   const router = useRouter();
@@ -43,9 +57,19 @@ export default function AccountPage() {
     router.push(profile ? "/profile" : "/signup");
   }
 
+  const trimmedEmail = email.trim();
+  const emailValid = EMAIL_RE.test(trimmedEmail);
+  const pwIssue = mode === "signup" ? passwordIssue(password) : null;
+  const canSubmit =
+    emailValid &&
+    (mode === "signup" ? !pwIssue : password.length > 0) &&
+    (mode === "signin" || agreedToTerms);
+
   async function onEmailSubmit() {
     setError("");
-    if (!email.trim() || !password) { setError("Enter your email and a password."); return; }
+    if (!emailValid) { setError("Enter a valid email address."); return; }
+    if (!password) { setError("Enter your password."); return; }
+    if (mode === "signup" && pwIssue) { setError(pwIssue); return; }
     if (mode === "signup" && !agreedToTerms) {
       setError("Please accept the Terms & Conditions to continue.");
       return;
@@ -54,30 +78,16 @@ export default function AccountPage() {
     try {
       if (mode === "signup") {
         const { needsConfirmation } = await signUpWithEmail(
-          email.trim(), password, name.trim() || undefined
+          trimmedEmail, password, name.trim() || undefined
         );
         if (needsConfirmation) setPendingConfirmation(true);
         else await afterAuth();
       } else {
-        await signInWithEmail(email.trim(), password);
+        await signInWithEmail(trimmedEmail, password);
         await afterAuth();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function onProvider(p: "google" | "apple") {
-    if (mode === "signup" && !agreedToTerms) {
-      setError("Please accept the Terms & Conditions to continue.");
-      return;
-    }
-    setBusy(true);
-    try {
-      await signInWithProvider(p);
-      await afterAuth();
     } finally {
       setBusy(false);
     }
@@ -113,17 +123,6 @@ export default function AccountPage() {
             : "Sign in to pick up where you left off."}
         </p>
 
-        <div className="oauth-row">
-          <button className="oauth-btn" onClick={() => onProvider("google")} disabled={busy}>
-            <span className="oauth-mark" aria-hidden>G</span> Continue with Google
-          </button>
-          <button className="oauth-btn" onClick={() => onProvider("apple")} disabled={busy}>
-            <span className="oauth-mark" aria-hidden></span> Continue with Apple
-          </button>
-        </div>
-
-        <div className="auth-divider"><span>or</span></div>
-
         {mode === "signup" && (
           <div className="auth-field">
             <label>Name (optional)</label>
@@ -137,6 +136,11 @@ export default function AccountPage() {
         <div className="auth-field">
           <label>Password</label>
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+          {mode === "signup" && (
+            <p className={`auth-hint ${password && !pwIssue ? "auth-hint-ok" : ""}`}>
+              {password && !pwIssue ? "✓ Looks good" : "At least 8 characters, including a letter and a number."}
+            </p>
+          )}
         </div>
 
         {mode === "signup" && (
@@ -158,7 +162,7 @@ export default function AccountPage() {
         <button
           className="btn-cta auth-submit"
           onClick={onEmailSubmit}
-          disabled={busy || (mode === "signup" && !agreedToTerms)}
+          disabled={busy || !canSubmit}
         >
           {busy ? "Please wait…" : mode === "signup" ? "Create account" : "Sign in"}
         </button>
