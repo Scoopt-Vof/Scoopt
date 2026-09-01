@@ -2,6 +2,8 @@
 // Sign-in / sign-up screen. Email + password (real Supabase Auth), plus
 // Google/Apple buttons (still fake — see lib/auth.ts SWAP POINT). New
 // sign-ups must confirm their email before continuing into the questionnaire.
+// Returning shoppers on a new device have their saved profile pulled from
+// Supabase (see lib/profile.ts) rather than being sent through the quiz again.
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -9,7 +11,7 @@ import Link from "next/link";
 import {
   signInWithEmail, signUpWithEmail, signInWithProvider, subscribe,
 } from "@/lib/auth";
-import { hasProfile } from "@/lib/profile";
+import { loadProfileAsync } from "@/lib/profile";
 
 export default function AccountPage() {
   const router = useRouter();
@@ -29,13 +31,16 @@ export default function AccountPage() {
     return subscribe((account) => {
       if (account) {
         setPendingConfirmation(false);
-        router.push(hasProfile() ? "/profile" : "/signup");
+        loadProfileAsync().then((profile) => {
+          router.push(profile ? "/profile" : "/signup");
+        });
       }
     });
   }, [router]);
 
-  function afterAuth() {
-    router.push(hasProfile() ? "/profile" : "/signup");
+  async function afterAuth() {
+    const profile = await loadProfileAsync();
+    router.push(profile ? "/profile" : "/signup");
   }
 
   async function onEmailSubmit() {
@@ -52,10 +57,10 @@ export default function AccountPage() {
           email.trim(), password, name.trim() || undefined
         );
         if (needsConfirmation) setPendingConfirmation(true);
-        else afterAuth();
+        else await afterAuth();
       } else {
         await signInWithEmail(email.trim(), password);
-        afterAuth();
+        await afterAuth();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
@@ -72,7 +77,7 @@ export default function AccountPage() {
     setBusy(true);
     try {
       await signInWithProvider(p);
-      afterAuth();
+      await afterAuth();
     } finally {
       setBusy(false);
     }
