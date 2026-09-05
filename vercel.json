@@ -4,11 +4,6 @@
     "frontend": {
       "root": "frontend",
       "framework": "nextjs"
-    },
-    "backend": {
-      "root": "backend",
-      "runtime": "node",
-      "entrypoint": "src/server.ts"
     }
   },
   "rewrites": [
