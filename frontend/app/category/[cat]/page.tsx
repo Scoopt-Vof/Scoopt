@@ -28,14 +28,14 @@ export default async function CategoryPage({
 
       <div className="sub-grid">
         {page.subcategories.map((s) => (
-          <div key={s.id} className="sub-card">
+          <Link key={s.id} href={`/category/${cat}/${s.id}`} className="sub-card">
             <h4>{s.name}</h4>
             <div className="sub-tags">
               {s.essentials.slice(0, 3).map((e) => (
                 <span key={e} className="sub-tag">{e}</span>
               ))}
             </div>
-          </div>
+          </Link>
         ))}
       </div>
 
