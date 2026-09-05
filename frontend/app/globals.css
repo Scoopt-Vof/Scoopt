@@ -60,6 +60,11 @@ a { color: inherit; text-decoration: none; }
 .page-title { font-size: clamp(22px, 3.4vw, 30px); margin-bottom: 6px; }
 .page-blurb { color: var(--muted); font-size: 14.5px; margin-bottom: 22px; max-width: 62ch; }
 
+/* Product hero image (product detail page) — Icecat-sourced when available,
+   see the TODO in app/product/[id]/page.tsx about attribution once the
+   contract can say which images came from Icecat. */
+.page-hero-image { display: block; width: 100%; max-width: 320px; max-height: 320px; object-fit: contain; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px; box-shadow: var(--shadow); margin-bottom: 20px; }
+
 /* Subcategory grid */
 .sub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
 .sub-card { background: var(--surface); border: 1px solid var(--line); border-radius: 13px; padding: 16px; box-shadow: var(--shadow); }
@@ -71,6 +76,8 @@ a { color: inherit; text-decoration: none; }
 .prod-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; margin-top: 8px; }
 .prod-card { background: var(--surface); border: 1px solid var(--line); border-radius: 13px; padding: 15px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 6px; }
 .prod-card:hover { border-color: var(--cta); }
+.prod-image { width: 100%; aspect-ratio: 1 / 1; object-fit: contain; background: var(--paper); border: 1px solid var(--line); border-radius: 9px; margin-bottom: 6px; }
+.prod-image-empty { background: var(--paper); border: 1px dashed var(--line); }
 .prod-brand { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); }
 .prod-name { font-size: 15px; font-weight: 600; }
 .prod-unit { font-size: 12px; color: var(--faint); }
@@ -285,7 +292,6 @@ a { color: inherit; text-decoration: none; }
   line-height: 1.55;
   margin-top: 4px;
 }
-
 
 .auth-terms {
   display: flex;
