@@ -34,6 +34,11 @@ export default function PersonalisedGrid({ products }: { products: Product[] }) 
       <div className="prod-grid">
         {items.map(({ product, reasons, matchScore }) => (
           <Link key={product.id} href={`/product/${product.id}`} className="prod-card">
+            {product.imageUrl ? (
+              <img src={product.imageUrl} alt="" className="prod-image" loading="lazy" />
+            ) : (
+              <div className="prod-image prod-image-empty" aria-hidden="true" />
+            )}
             <span className="prod-brand">{product.brand}</span>
             <span className="prod-name">{product.name}</span>
             <span className="prod-unit">{product.unit}</span>
