@@ -156,3 +156,9 @@ function scoreProduct(
     reasons: reasons.slice(0, 2), // keep the "for you" line short
   };
 }
+
+
+  // ---- async loader used by app/account/page.tsx ----
+// The profile still lives in localStorage today. A Supabase-backed lookup
+// replaces the body later; the call sites do not change.
+export async function loadProfileAsync(): Promise<ShopperProfile | null> { return loadProfile(); }
