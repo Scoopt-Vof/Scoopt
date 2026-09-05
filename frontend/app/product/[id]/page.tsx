@@ -32,6 +32,18 @@ export default async function ProductPage({
         {product.brand} · {product.unit}
       </p>
 
+      {product.image && (
+        // TODO: once the Icecat enrichment backend lands, the contract will
+        // need to say WHICH images came from Icecat so the required "Specs
+        // Icecat" + AS-IS attribution can be shown only for those, not for
+        // every image regardless of source.
+        <img
+          src={product.image}
+          alt={product.name}
+          className="page-hero-image"
+        />
+      )}
+
       <ForYou product={product} />
 
       <p className="note">Price per store, cheapest first · sample data</p>
