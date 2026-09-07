@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Scoopt back end — single-retailer vertical slice (Decathlon). Trial run.",
+  "description": "Scoopt back end — ingestion, API and data quality. Prices come from eBay; Icecat enriches them.",
   "scripts": {
     "fixture": "node scripts/make-fixture.mjs",
     "start": "tsx src/server.ts",
@@ -15,10 +15,10 @@
     "typecheck": "tsc --noEmit",
     "ingest:list": "tsx --env-file=.env src/ingest/run.ts --list",
     "ingest:all": "tsx --env-file=.env src/ingest/run.ts all",
-        "enrich:icecat": "tsx --env-file=.env src/ingest/enrich-icecat.ts",
+    "enrich:icecat": "tsx --env-file=.env src/ingest/enrich-icecat.ts",
     "serve": "tsx --env-file=.env src/contract-server.ts",
-    "trial": "npm run db:migrate && npm run serve",
-   },
+    "trial": "npm run db:migrate && npm run serve"
+  },
   "dependencies": {
     "postgres": "^3.4.5",
     "zod": "^3.24.1"
