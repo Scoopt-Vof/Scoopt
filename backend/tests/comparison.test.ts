@@ -1,9 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { fileURLToPath } from 'node:url';
 import { sql } from '../src/lib/db';
 import { ingest } from '../src/ingest/run';
-import { DecathlonSource } from '../src/sources/decathlon';
-import { FixtureSource } from '../src/sources/fixture';
+import { TestCatalogueSource } from './helpers/test-source';
 import { productHandler, searchHandler } from '../src/api/handlers';
 import { ProductWithOffersSchema } from '../src/contract/schemas';
 
@@ -17,17 +15,16 @@ import { ProductWithOffersSchema } from '../src/contract/schemas';
  * name doesn't change identity depending on which feed ran last.
  */
 
-const FIXTURE = fileURLToPath(new URL('../data/decathlon-products.json', import.meta.url));
-
 // Same EANs, deliberately different prices: 100%, 92%, 110%.
-const cheaper = new FixtureSource('sportshop', 'SportShop', 'https://sportshop.example', FIXTURE, 0.92);
-const dearer  = new FixtureSource('bigsport',  'BigSport',  'https://bigsport.example',  FIXTURE, 1.10);
+const baseline = new TestCatalogueSource();
+const cheaper  = new TestCatalogueSource('sportshop', 'SportShop', 'https://sportshop.invalid', 0.92);
+const dearer   = new TestCatalogueSource('bigsport',  'BigSport',  'https://bigsport.invalid',  1.10);
 
 let productId: string;
 
 beforeAll(async () => {
   await sql`truncate price_observation, offer, match_review_queue, ingest_run, product, retailer restart identity cascade`;
-  await ingest(new DecathlonSource()); // 100%
+  await ingest(baseline);              // 100%
   await ingest(cheaper);               // 92%  ← should always win
   await ingest(dearer);                // 110%
 
@@ -74,7 +71,7 @@ describe('multi-retailer comparison', () => {
     const [p] = await sql<{ id: number }[]>`select id from product limit 1`;
     await sql`
       insert into retailer (slug, name, homepage_url, source_kind)
-      values ('trap', 'TrapShop', 'https://trap.example', 'fixture')
+      values ('trap', 'TrapShop', 'https://trap.invalid', 'fixture')
       on conflict (slug) do nothing`;
     const [trap] = await sql<{ id: number }[]>`select id from retailer where slug = 'trap'`;
 
@@ -84,7 +81,7 @@ describe('multi-retailer comparison', () => {
     // 1 cent cheaper on the sticker, 500 cents dearer delivered.
     await sql`
       insert into offer (product_id, retailer_id, retailer_sku, price_cents, shipping_cents, in_stock, product_url)
-      values (${p.id}, ${trap.id}, 'TRAP-1', ${cheapest.t - 1}, 500, true, 'https://trap.example/p/1')
+      values (${p.id}, ${trap.id}, 'TRAP-1', ${cheapest.t - 1}, 500, true, 'https://trap.invalid/p/1')
       on conflict (product_id, retailer_id) do update set price_cents = excluded.price_cents`;
 
     const res = await productHandler(new Request('http://x/'), String(p.id));
@@ -103,7 +100,7 @@ describe('multi-retailer comparison', () => {
   });
 
   it('search reports how many retailers each product has', async () => {
-    const res = await searchHandler(new Request('http://x/api/search?q=Kalenji'));
+    const res = await searchHandler(new Request('http://x/api/search?q=Testmerk'));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.length).toBeGreaterThan(0);

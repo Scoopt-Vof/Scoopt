@@ -15,6 +15,6 @@ export async function POST(req: Request) {
   if (!event?.type || !event?.productId) {
     return NextResponse.json({ error: "Body must be a TrackEvent" }, { status: 400 });
   }
-  // Fake backend: accept and drop. Real backend persists per-account.
+  // Accepted and dropped until the backend persists events per-account.
   return NextResponse.json({ ok: true });
 }

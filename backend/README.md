@@ -1,11 +1,15 @@
-# Scoopt back end — Decathlon trial run
+# Scoopt back end
 
-A complete, working, single-retailer vertical slice: database → ingestion → API →
-tests. Everything runs. Nothing here is a sketch.
+A complete, working vertical slice: database → ingestion → API → tests.
+Everything runs. Nothing here is a sketch.
 
-**Read `DECATHLON-NOTE.md` first** — it explains why the source adapter reads a
-stand-in catalogue rather than decathlon.nl, and what to change when a licensed
-feed arrives.
+Prices come from **eBay** only (see `README-LIVE-APIS.md`); **Icecat** enriches
+products with images, descriptions and specs but carries no prices. No other
+source may produce data on the site.
+
+Sources with invented prices are refused on the write path in
+`src/ingest/run.ts` unless `ALLOW_SYNTHETIC_SOURCES=1`, which only the test
+suite sets. Never set it against the database that serves scoopt.nl.
 
 ---
 
@@ -129,8 +133,8 @@ src/contract-server.ts     dev server for those contract shapes
 src/server.ts              a tiny dev server so you can curl it without Next.js
 tests/                     unit, integration and data-quality tests
 tests/setup.ts             refuses to run the suite against your real database
-data/                      the stand-in Decathlon catalogue
-raw/                       archived payloads, one per ingest run
+raw/                       archived payloads, one per ingest run (gitignored)
+tests/fixtures/            test-only catalogue: invented brands, never shipped
 ```
 
 ---
@@ -155,10 +159,10 @@ import { searchHandler } from '@/src/api/handlers';
 export const GET = searchHandler;
 ```
 
-The `DATA_SOURCE` flag from the 6 Aug plan sits above this: `lib/data/index.ts`
-returns either `lib/fakeData.ts` or these queries. That's how you flip between
-fake and real in one second, and how `lib/fakeData.ts` stays useful as a test
-oracle instead of being deleted.
+There is no fake-data fallback to flip between any more. `lib/fakeData.ts` has
+been deleted, and the Next.js routes proxy to this backend via `lib/backend.ts`.
+If the backend is unreachable the routes return 502/503 and the pages render
+empty — which is the correct failure mode for a price-comparison site.
 
 ---
 

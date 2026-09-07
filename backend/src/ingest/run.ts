@@ -30,6 +30,20 @@ export interface IngestSummary {
 }
 
 export async function ingest(source: RetailerSource): Promise<IngestSummary> {
+  // ---- refuse invented prices, on the WRITE path ---------------------------
+  // The registry guards which sources you can NAME. This guards what actually
+  // reaches the database, so a source constructed directly — as the old
+  // DecathlonSource was, in tests — cannot route around it. Invented prices
+  // attributed to a real retailer are a legal liability, not a dev convenience.
+  if (source.sourceKind === 'fixture' && process.env.ALLOW_SYNTHETIC_SOURCES !== '1') {
+    throw new Error(
+      `Source "${source.slug}" is a fixture with INVENTED prices. Refusing to ` +
+      `write it to the database.\n` +
+      `Set ALLOW_SYNTHETIC_SOURCES=1 only for a throwaway or test database. ` +
+      `Never for the database that serves scoopt.nl.`
+    );
+  }
+
   // ---- retailer row (idempotent) -----------------------------------------
   // Delivery rules are optional on the interface — only sources that know them
   // (the Dutch seed retailers) supply them; a raw price API has no idea.
@@ -184,7 +198,6 @@ async function queueForReview(retailerId: number, raw: RawOffer, reason: string)
 }
 
 // ---- CLI entry point -------------------------------------------------------
-//   npm run ingest                     → the stand-in catalogue
 //   npm run ingest -- ebay-nl          → one live source
 //   npm run ingest -- ebay-nl ebay-de  → two, and comparison rows appear
 //   npm run ingest -- all              → every source you have credentials for

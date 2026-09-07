@@ -1,9 +1,9 @@
 # Scoopt — Next.js starter scaffold
 
 This is the real starting point for the Scoopt website, built on the structure
-you and Larry agreed. It runs entirely on **fake data** right now, so the whole
-frontend works before the real backend exists. That is deliberate — it is how
-you two build in parallel without blocking each other.
+you and Larry agreed. It reads **only real data from the backend**. The former
+`lib/fakeData.ts` stand-in has been removed: invented prices shown next to real
+retailer names are a legal liability, so the site now shows real data or nothing.
 
 ---
 
@@ -73,8 +73,8 @@ buying from more than one store — once delivery is counted?"**
 - `app/basket/page.tsx` shows the verdict banner, both plans side by side, and
   the per-item "cheapest at" store.
 
-Delivery rules (a flat fee waived above a threshold) live in `lib/fakeData.ts`
-for now — Larry supplies real ones later; the shapes hold.
+Delivery rules (a flat fee waived above a threshold) come from the backend's
+`retailer` table, per retailer. They are never hardcoded in the frontend.
 
 ## Accounts &amp; sign-in
 
@@ -98,7 +98,7 @@ rather than a long form. Sign-up stays short; these deepen over time.
 scoopt/
   contract/types.ts     ← THE SEAM. The data shapes both halves agree on.
   lib/
-    fakeData.ts          ← temporary stand-in for Larry's backend
+    backend.ts           ← the ONE place the API routes reach the backend
     api.ts               ← the ONE place the frontend calls the API
   app/
     layout.tsx           ← header/footer wrapper
@@ -113,9 +113,13 @@ scoopt/
 
 The golden rule: **the frontend never touches the database.** It only ever
 calls the functions in `lib/api.ts`, which hit the `app/api/*` routes, which
-today read from `lib/fakeData.ts`. When Larry's backend is ready, only the
-*insides* of those API routes change — the shapes in `contract/types.ts` stay
-identical, so the frontend keeps working untouched.
+proxy to the real backend via `lib/backend.ts`.
+
+There is deliberately **no fallback catalogue**. `lib/fakeData.ts` used to
+invent products, stores, prices and 30-day price histories, and the site served
+them as though they were real. If `BACKEND_URL` is unset or the backend is
+unreachable, these routes now return 503/502 and the pages render empty. An
+empty page is honest; an invented price attributed to a real shop is not.
 
 ---
 
@@ -139,7 +143,10 @@ npm run dev        # starts the local site
 
 Open **http://localhost:3000** in your browser. You'll see the Scoopt home
 page. Click a category → a subcategory's products → a product to see the
-price-comparison lane. All of it is running on the fake data.
+price-comparison lane.
+
+You need `BACKEND_URL` set in `.env.local` (pointing at the Railway backend) or
+the API routes return 503 and the pages render empty — by design.
 
 Press `Ctrl + C` in the terminal to stop it.
 
@@ -148,10 +155,9 @@ Press `Ctrl + C` in the terminal to stop it.
 ## How you and Larry split this
 
 - **You (frontend):** everything in `app/` (except `app/api/`), `components/`,
-  and `lib/api.ts`. Make the pages look and work well against the fake data.
-- **Larry (backend):** `app/api/*` and, later, a real database. His job is to
-  make those routes return the same shapes `lib/fakeData.ts` returns now, but
-  from real retailer feeds instead.
+  and `lib/api.ts`.
+- **Larry (backend):** `app/api/*` and the real database behind them. Those
+  routes are thin proxies to the backend; the shapes are what must match.
 - **Shared, agreed together:** `contract/types.ts`. Never change a shape here
   without telling the other person — it's the seam that keeps both halves fitting.
 

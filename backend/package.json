@@ -5,7 +5,6 @@
   "type": "module",
   "description": "Scoopt back end — ingestion, API and data quality. Prices come from eBay; Icecat enriches them.",
   "scripts": {
-    "fixture": "node scripts/make-fixture.mjs",
     "start": "tsx src/server.ts",
     "db:migrate": "node --env-file=.env scripts/migrate.mjs",
     "ingest": "tsx --env-file=.env src/ingest/run.ts",
