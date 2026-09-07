@@ -315,7 +315,8 @@ export interface PersonaliseRequest {
 //   routes exist now as fake-backed stubs so Larry can swap their innards for
 //   real DB calls without the frontend changing.
 //
-// While the backend is being built, these are served from fake data
-// (see lib/fakeData.ts). Larry swaps the fake source for the real database
-// WITHOUT changing these shapes — so your frontend keeps working unchanged.
+// These are served from the real backend only. The former lib/fakeData.ts
+// stand-in has been removed: invented prices next to real retailer names are a
+// legal liability. If the backend is unreachable the routes fail visibly rather
+// than falling back to made-up data.
 // ---------------------------------------------------------------------------

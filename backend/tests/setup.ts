@@ -22,3 +22,8 @@ if (testUrl === process.env.DATABASE_URL) {
 
 // src/lib/db.ts reads DATABASE_URL, so point it at the test database here.
 process.env.DATABASE_URL = testUrl;
+
+// The suite ingests a test-only catalogue of invented products (sourceKind
+// 'fixture'), which src/ingest/run.ts refuses by default. This is the ONLY
+// place that override is set, and it applies only to TEST_DATABASE_URL.
+process.env.ALLOW_SYNTHETIC_SOURCES = '1';

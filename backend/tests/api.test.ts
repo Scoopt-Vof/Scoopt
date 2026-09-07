@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { sql } from '../src/lib/db';
 import { ingest } from '../src/ingest/run';
-import { DecathlonSource } from '../src/sources/decathlon';
+import { TestCatalogueSource } from './helpers/test-source';
 import { productHandler, searchHandler, priceHistoryHandler, trackHandler } from '../src/api/handlers';
 import { ProductWithOffersSchema, ProductSchema, PriceHistorySchema } from '../src/contract/schemas';
 
@@ -16,7 +16,7 @@ let anyProductId: string;
 
 beforeAll(async () => {
   await sql`truncate price_observation, offer, match_review_queue, ingest_run, product, retailer restart identity cascade`;
-  const summary = await ingest(new DecathlonSource());
+  const summary = await ingest(new TestCatalogueSource());
   expect(summary.offersUpserted).toBeGreaterThan(0);
 
   const [row] = await sql<{ id: number }[]>`select id from product order by id limit 1`;
@@ -55,7 +55,7 @@ describe('GET /api/product/:id', () => {
 
 describe('GET /api/search', () => {
   it('finds products by brand', async () => {
-    const res = await searchHandler(new Request('http://x/api/search?q=Kalenji'));
+    const res = await searchHandler(new Request('http://x/api/search?q=Testmerk'));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.length).toBeGreaterThan(0);
@@ -76,8 +76,8 @@ describe('GET /api/search', () => {
 
 describe('GET /api/price-history/:id', () => {
   it('satisfies min30 <= currentMin <= max30 after repeated ingests', async () => {
-    await ingest(new DecathlonSource());
-    await ingest(new DecathlonSource());
+    await ingest(new TestCatalogueSource());
+    await ingest(new TestCatalogueSource());
 
     const res = await priceHistoryHandler(new Request('http://x/'), anyProductId);
     expect(res.status).toBe(200);
@@ -104,14 +104,14 @@ describe('POST /api/track', () => {
 describe('ingestion behaviour', () => {
   it('is idempotent — re-running does not duplicate offers', async () => {
     const [before] = await sql<{ c: string }[]>`select count(*) as c from offer`;
-    await ingest(new DecathlonSource());
+    await ingest(new TestCatalogueSource());
     const [after] = await sql<{ c: string }[]>`select count(*) as c from offer`;
     expect(after.c).toBe(before.c);
   });
 
   it('appends a price observation on every run, even when the price is unchanged', async () => {
     const [before] = await sql<{ c: string }[]>`select count(*) as c from price_observation`;
-    await ingest(new DecathlonSource());
+    await ingest(new TestCatalogueSource());
     const [after] = await sql<{ c: string }[]>`select count(*) as c from price_observation`;
     expect(Number(after.c)).toBeGreaterThan(Number(before.c));
   });
@@ -132,13 +132,13 @@ describe('ingestion behaviour', () => {
     const junkPath = '/tmp/scoopt-junk-fixture.json';
     const { writeFile } = await import('node:fs/promises');
     await writeFile(junkPath, JSON.stringify({ products: [{
-      retailerSku: 'JUNK-1', ean: 'N/A', brand: 'Kalenji', title: 'Broken row',
+      retailerSku: 'JUNK-1', ean: 'N/A', brand: 'Testmerk', title: 'Broken row',
       category: 'hardlopen', priceCents: 1999, inStock: true,
-      productUrl: 'https://www.decathlon.nl/p/x',
+      productUrl: 'https://retailer.invalid/p/x',
     }] }));
 
     const before = await sql<any[]>`select count(*) as c from match_review_queue`;
-    await ingest(new DecathlonSource(junkPath));
+    await ingest(new TestCatalogueSource('testshop', 'TestShop', 'https://testshop.invalid', 1, junkPath));
     const after = await sql<any[]>`select count(*) as c from match_review_queue`;
     expect(Number(after[0].c)).toBe(Number(before[0].c) + 1);
 

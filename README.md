@@ -9,10 +9,11 @@ The Next.js website (Josh). Run it:
     npm run dev        ->  http://localhost:3000
 
 ## backend/
-The API + data (Larry). Run the no-database mock:
+The API + data (Larry). Needs a database and a .env — see backend/README.md:
     cd backend
     npm install
-    npm run mock
+    npm run db:migrate
+    npm run serve      ->  http://localhost:3002
 
 ## Working together
 - Pull before you start, push when you finish.
