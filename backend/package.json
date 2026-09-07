@@ -19,9 +19,8 @@
     "mock": "tsx mock/standalone/server.ts",
     "mock:build": "node mock/generate-fakedata.mjs && cp mock/out/fakeData.ts mock/verify/lib/fakeData.ts && sed \"s|from \\\"@/contract/types\\\"|from \\\"./types\\\"|\" mock/out/fakeData.ts > mock/standalone/fakeData.ts",
     "mock:check": "tsc -p mock/verify --noEmit && tsx mock/verify/check.ts",
-    "seed": "tsx --env-file=.env src/ingest/run.ts decathlon-nl jdsports-nl bever-nl intersport-nl bol-com",
     "serve": "tsx --env-file=.env src/contract-server.ts",
-    "trial": "npm run db:migrate && npm run seed && npm run serve",
+    "trial": "npm run db:migrate && npm run serve",
     "trial:verify": "tsx mock/verify/equivalence.ts"
   },
   "dependencies": {

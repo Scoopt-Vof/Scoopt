@@ -4,39 +4,32 @@ import { EbaySource } from './ebay';
 import { KrogerSource } from './kroger';
 import { BestBuySource } from './bestbuy';
 import { OpenPricesSource } from './openprices';
-import { DUTCH_SEEDS } from './dutch-seed';
 
 /**
  * Every source, keyed by the name you pass on the command line:
  *
  *   npm run ingest -- ebay-nl
- *   npm run ingest -- ebay-nl ebay-de ebay-gb     (comparison rows appear here)
+ *   npm run ingest -- ebay-nl ebay-de ebay-gb   (comparison rows appear here)
  *   npm run ingest -- all
  *
- * Ordered easiest-first. `credentials` says what you need before it will run.
+ * `credentials` says what you need before it will run.
+ *
+ * `synthetic` marks a source whose PRICES ARE INVENTED. Those must never reach
+ * the database that serves scoopt.nl: `all` skips them, and naming one on the
+ * command line is refused unless ALLOW_SYNTHETIC_SOURCES=1 is set. Any source
+ * added later with made-up prices must carry this flag.
  */
 
 export interface SourceEntry {
   build: () => RetailerSource;
   credentials: string[];
   blurb: string;
+  /** Invented prices — excluded from `all`. Local/throwaway databases only. */
+  synthetic?: boolean;
 }
 
 export const SOURCES: Record<string, SourceEntry> = {
-  // ── The trial-run set: five Dutch sports retailers, same catalogue as the
-  //    mock, invented prices. This is what `npm run seed` ingests. ──────────
-  ...Object.fromEntries(DUTCH_SEEDS.map((s) => [s.slug.replace(/\./g, '-'), {
-    build: () => s,
-    credentials: [] as string[],
-    blurb: `${s.name} — seed data (invented prices). Part of the trial-run set.`,
-  }])),
-
-  // ── Tier 0: works right now, nothing to sign up for ──────────────────────
-  decathlon: {
-    build: () => new DecathlonSource(),
-    credentials: [],
-    blurb: 'Stand-in catalogue. No network. Always works — use it to check the pipeline.',
-  },
+  // ── Tier 0: real prices, nothing to sign up for ──────────────────────────
   'openprices-ah': {
     build: () => new OpenPricesSource('Albert Heijn'),
     credentials: [],
@@ -72,18 +65,30 @@ export const SOURCES: Record<string, SourceEntry> = {
     blurb: 'Third price against the same EAN.',
   },
 
+  // ── Next affiliate programmes plug in here. One entry each, real prices,
+  //    no `synthetic` flag. ────────────────────────────────────────────────
+
   // ── Tier 3: works, but the terms do not survive a real comparison site ───
   bestbuy: {
     build: () => new BestBuySource(),
     credentials: ['BESTBUY_API_KEY'],
     blurb: 'US electronics. ⚠️ Terms forbid comparison use — prototype only, never ship.',
   },
+
+  // ── Synthetic. Invented prices against real Decathlon house-brand names.
+  //    Pipeline smoke-testing only, against a throwaway database. ──────────
+  decathlon: {
+    build: () => new DecathlonSource(),
+    credentials: [],
+    blurb: 'Stand-in catalogue, INVENTED prices. No network. Pipeline smoke test only.',
+    synthetic: true,
+  },
 };
 
 export function resolveSources(names: string[]): RetailerSource[] {
   if (names.length === 0 || names[0] === 'all') {
     return Object.entries(SOURCES)
-      .filter(([, e]) => e.credentials.every((c) => process.env[c]))
+      .filter(([, e]) => !e.synthetic && e.credentials.every((c) => process.env[c]))
       .map(([, e]) => e.build());
   }
 
@@ -100,6 +105,13 @@ export function resolveSources(names: string[]): RetailerSource[] {
         `Source "${name}" needs ${missing.join(' and ')} in your .env file.\n  ${entry.blurb}`
       );
     }
+    if (entry.synthetic && process.env.ALLOW_SYNTHETIC_SOURCES !== '1') {
+      throw new Error(
+        `Source "${name}" has INVENTED prices and is refused by default.\n` +
+        `Set ALLOW_SYNTHETIC_SOURCES=1 to run it against a local or throwaway database.\n` +
+        `Never set it for the database that serves scoopt.nl.`
+      );
+    }
     return entry.build();
   });
 }
@@ -109,7 +121,8 @@ export function printSources(): void {
   for (const [name, e] of Object.entries(SOURCES)) {
     const ready = e.credentials.every((c) => process.env[c]);
     const state = e.credentials.length === 0 ? 'no setup' : ready ? 'ready' : `needs ${e.credentials.join(', ')}`;
-    console.log(`  ${name.padEnd(18)} [${state}]`);
+    const tag = e.synthetic ? ' ⚠️ INVENTED PRICES — excluded from `all`' : '';
+    console.log(`  ${name.padEnd(18)} [${state}]${tag}`);
     console.log(`  ${''.padEnd(18)} ${e.blurb}\n`);
   }
 }
