@@ -1,9 +1,5 @@
 import type { RetailerSource } from './types';
-import { DecathlonSource } from './decathlon';
 import { EbaySource } from './ebay';
-import { KrogerSource } from './kroger';
-import { BestBuySource } from './bestbuy';
-import { OpenPricesSource } from './openprices';
 
 /**
  * Every source, keyed by the name you pass on the command line:
@@ -17,7 +13,11 @@ import { OpenPricesSource } from './openprices';
  * `synthetic` marks a source whose PRICES ARE INVENTED. Those must never reach
  * the database that serves scoopt.nl: `all` skips them, and naming one on the
  * command line is refused unless ALLOW_SYNTHETIC_SOURCES=1 is set. Any source
- * added later with made-up prices must carry this flag.
+ * added later with made-up prices must carry this flag. There are none today.
+ *
+ * NOTE: Icecat is deliberately not in here. It is not a retailer and has no
+ * prices — it enriches products that already exist with images, descriptions
+ * and specs. It runs as its own pass: `npm run enrich:icecat`.
  */
 
 export interface SourceEntry {
@@ -29,26 +29,6 @@ export interface SourceEntry {
 }
 
 export const SOURCES: Record<string, SourceEntry> = {
-  // ── Tier 0: real prices, nothing to sign up for ──────────────────────────
-  'openprices-ah': {
-    build: () => new OpenPricesSource('Albert Heijn'),
-    credentials: [],
-    blurb: 'Real Dutch prices, no API key at all. Small volume. ODbL — read the header.',
-  },
-  'openprices-jumbo': {
-    build: () => new OpenPricesSource('Jumbo'),
-    credentials: [],
-    blurb: 'As above, Jumbo stores.',
-  },
-
-  // ── Tier 1: instant self-service credentials ─────────────────────────────
-  kroger: {
-    build: () => new KrogerSource(),
-    credentials: ['KROGER_CLIENT_ID', 'KROGER_CLIENT_SECRET'],
-    blurb: 'US supermarket. Instant signup, real prices + UPC. Fastest real API to first call.',
-  },
-
-  // ── Tier 2: ~1 day, and the one that actually matters ────────────────────
   'ebay-nl': {
     build: () => new EbaySource('EBAY_NL'),
     credentials: ['EBAY_CLIENT_ID', 'EBAY_CLIENT_SECRET'],
@@ -65,24 +45,10 @@ export const SOURCES: Record<string, SourceEntry> = {
     blurb: 'Third price against the same EAN.',
   },
 
-  // ── Next affiliate programmes plug in here. One entry each, real prices,
-  //    no `synthetic` flag. ────────────────────────────────────────────────
-
-  // ── Tier 3: works, but the terms do not survive a real comparison site ───
-  bestbuy: {
-    build: () => new BestBuySource(),
-    credentials: ['BESTBUY_API_KEY'],
-    blurb: 'US electronics. ⚠️ Terms forbid comparison use — prototype only, never ship.',
-  },
-
-  // ── Synthetic. Invented prices against real Decathlon house-brand names.
-  //    Pipeline smoke-testing only, against a throwaway database. ──────────
-  decathlon: {
-    build: () => new DecathlonSource(),
-    credentials: [],
-    blurb: 'Stand-in catalogue, INVENTED prices. No network. Pipeline smoke test only.',
-    synthetic: true,
-  },
+  // ── Further affiliate programmes plug in here, one entry each. Every source
+  //    must return prices a retailer actually charges. Anything with invented
+  //    prices carries `synthetic: true`, which keeps it out of `all` and
+  //    refuses to run without an explicit override. ─────────────────────────
 };
 
 export function resolveSources(names: string[]): RetailerSource[] {
