@@ -152,15 +152,15 @@ export async function searchProducts(q: string): Promise<Product[]> {
 // GET /api/category/:cat
 // ---------------------------------------------------------------------------
 const SUBCATEGORY_META: Record<string, { name: string; icon: string; essentials: string[] }> = {
-  hardlopen: { name: 'Hardlopen', icon: 'shoe', essentials: ['Hardloopschoenen', 'GPS-horloge', 'Hardloopsokken', 'Hartslagband'] },
-  fietsen:   { name: 'Fietsen',   icon: 'bike', essentials: ['Fiets', 'Helm', 'Fietsbroek', 'Verlichting'] },
-  fitness:   { name: 'Fitness',   icon: 'dumbbell', essentials: ['Trainingsschoenen', 'Dumbbells', 'Fitnessmat', 'Weerstandsbanden'] },
+  hardlopen: { name: 'Running', icon: 'shoe',     essentials: ['Running shoes', 'GPS watch', 'Running socks', 'Heart rate strap'] },
+  fietsen:   { name: 'Cycling', icon: 'bike',     essentials: ['Bike', 'Helmet', 'Cycling shorts', 'Lights'] },
+  fitness:   { name: 'Fitness', icon: 'dumbbell', essentials: ['Training shoes', 'Dumbbells', 'Exercise mat', 'Resistance bands'] },
 };
 
 const CATEGORY_META: Record<Category, { name: string; blurb: string }> = {
-  sport: { name: 'Sport', blurb: 'Vind de juiste spullen voor de sport die je écht doet — met de prijs van elke winkel naast elkaar.' },
-  home:  { name: 'Wonen', blurb: 'Binnenkort — we beginnen met sport en breiden daarna uit.' },
-  tech:  { name: 'Techniek', blurb: 'Binnenkort — we beginnen met sport en breiden daarna uit.' },
+  sport: { name: 'Sport',            blurb: 'Find the right kit for the sport you actually do — with every shop’s price side by side.' },
+  home:  { name: 'Home & furniture', blurb: 'Coming soon — we’re starting with sport and expanding from there.' },
+  tech:  { name: 'Technology',       blurb: 'Coming soon — we’re starting with sport and expanding from there.' },
 };
 
 export async function getCategory(cat: string): Promise<CategoryPage | null> {
