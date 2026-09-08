@@ -10,9 +10,13 @@
 //
 // Field ids are free-form EXCEPT where they intentionally match a key the
 // scoring engine already reads (see lib/profile.ts scoreProduct):
-//   - "niveau" on running (hardlopen) is compared against a product's
-//     specs.level, so keep its option VALUES as "beginner" / "gevorderd".
+//   - "niveau" on running is compared against a product's specs.level, so
+//     keep its option VALUES as "beginner" / "gevorderd".
 // Every other field id is just stored for future ranking rules.
+//
+// Subcategory ids are English throughout (running, cycling, fitness-gym, ...),
+// matching backend/src/api/contract-queries.ts SUBCATEGORY_META and the tags
+// in backend/src/sources/ebay.ts DEFAULT_QUERIES.
 // ============================================================================
 
 export interface SubcategoryField {
@@ -30,7 +34,7 @@ export interface SubcategoryConfig {
 
 export const SUBCATEGORY_QUESTIONS: Record<string, SubcategoryConfig> = {
   // ---- Home & furniture ----
-  woonkamer: {
+  furniture: {
     intro: "A few details about the room, and we'll point you at the right sofa, table and rug instead of every one in the catalogue.",
     fields: [
       { id: "roomSize", label: "Room size (m²)", type: "number", placeholder: "e.g. 24" },
@@ -46,7 +50,7 @@ export const SUBCATEGORY_QUESTIONS: Record<string, SubcategoryConfig> = {
       },
     ],
   },
-  slaapkamer: {
+  bedroom: {
     intro: "Tell us the room and bed size, and we'll narrow the frames and mattresses down to ones that actually fit.",
     fields: [
       { id: "roomSize", label: "Room size (m²)", type: "number", placeholder: "e.g. 14" },
@@ -62,7 +66,7 @@ export const SUBCATEGORY_QUESTIONS: Record<string, SubcategoryConfig> = {
       },
     ],
   },
-  keuken: {
+  'kitchen-dining': {
     intro: "A quick sense of the kitchen and who you cook for shapes what's actually worth buying.",
     fields: [
       {
@@ -78,7 +82,7 @@ export const SUBCATEGORY_QUESTIONS: Record<string, SubcategoryConfig> = {
   },
 
   // ---- Sport ----
-  hardlopen: {
+  running: {
     intro: "Tell us how you run, and we'll skip the shoes and watches that aren't right for you.",
     fields: [
       {
@@ -99,7 +103,7 @@ export const SUBCATEGORY_QUESTIONS: Record<string, SubcategoryConfig> = {
       },
     ],
   },
-  fietsen: {
+  cycling: {
     intro: "The right bike and kit depend entirely on how and how far you ride.",
     fields: [
       {
@@ -114,7 +118,7 @@ export const SUBCATEGORY_QUESTIONS: Record<string, SubcategoryConfig> = {
       { id: "distance", label: "Typical distance per week (km)", type: "number", placeholder: "e.g. 40" },
     ],
   },
-  fitness: {
+  'fitness-gym': {
     intro: "What you're training for and where you'll train changes what's worth buying.",
     fields: [
       {
@@ -138,7 +142,7 @@ export const SUBCATEGORY_QUESTIONS: Record<string, SubcategoryConfig> = {
   },
 
   // ---- Technology ----
-  laptops: {
+  'laptops-computers': {
     intro: "What you'll actually use it for matters far more than the spec sheet.",
     fields: [
       {

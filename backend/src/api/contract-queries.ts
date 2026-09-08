@@ -151,16 +151,47 @@ export async function searchProducts(q: string): Promise<Product[]> {
 // ---------------------------------------------------------------------------
 // GET /api/category/:cat
 // ---------------------------------------------------------------------------
+// English ids throughout, matching the tags in ../sources/ebay.ts DEFAULT_QUERIES
+// and the front end's lib/subcategoryQuestions.ts. Every id ebay.ts can tag an
+// offer with has an entry here, so a subcategory that just received its first
+// product still gets a real name/icon/essentials list, not the raw id as a
+// fallback.
 const SUBCATEGORY_META: Record<string, { name: string; icon: string; essentials: string[] }> = {
-  hardlopen: { name: 'Hardlopen', icon: 'shoe', essentials: ['Hardloopschoenen', 'GPS-horloge', 'Hardloopsokken', 'Hartslagband'] },
-  fietsen:   { name: 'Fietsen',   icon: 'bike', essentials: ['Fiets', 'Helm', 'Fietsbroek', 'Verlichting'] },
-  fitness:   { name: 'Fitness',   icon: 'dumbbell', essentials: ['Trainingsschoenen', 'Dumbbells', 'Fitnessmat', 'Weerstandsbanden'] },
+  // ---- Sport ----
+  running:        { name: 'Running',          icon: 'shoe',      essentials: ['Running shoes', 'GPS watch', 'Running socks', 'Heart rate monitor'] },
+  cycling:        { name: 'Cycling',          icon: 'bike',      essentials: ['Bike', 'Helmet', 'Cycling shorts', 'Lights'] },
+  'hiking-outdoor': { name: 'Hiking & Outdoor', icon: 'mountain', essentials: ['Hiking boots', 'Backpack', 'Rain shell', 'Trekking poles'] },
+  'fitness-gym':  { name: 'Fitness & Gym',    icon: 'dumbbell',  essentials: ['Training shoes', 'Dumbbells', 'Fitness mat', 'Resistance bands'] },
+  swimming:       { name: 'Swimming',         icon: 'waves',     essentials: ['Swimsuit', 'Goggles', 'Swim cap', 'Fins'] },
+  'team-sports':  { name: 'Team Sports',      icon: 'ball',      essentials: ['Boots', 'Shin guards', 'Match ball', 'Kit bag'] },
+  'racket-sports': { name: 'Racket Sports',   icon: 'racket',    essentials: ['Racket', 'Balls', 'Court shoes', 'Grip tape'] },
+  'winter-sports': { name: 'Winter Sports',   icon: 'snowflake', essentials: ['Skis or board', 'Boots', 'Goggles', 'Thermal layers'] },
+
+  // ---- Home & Furniture ----
+  furniture:        { name: 'Furniture',              icon: 'sofa',    essentials: ['Sofa', 'Dining table', 'Chairs', 'Bookshelf'] },
+  'kitchen-dining': { name: 'Kitchen & Dining',        icon: 'plate',   essentials: ['Cookware set', 'Dinner plates', 'Cutlery', 'Stand mixer'] },
+  bedroom:          { name: 'Bedroom',                 icon: 'bed',     essentials: ['Bed frame', 'Mattress', 'Wardrobe', 'Bedside table'] },
+  lighting:         { name: 'Lighting',                icon: 'lamp',    essentials: ['Floor lamp', 'Pendant light', 'Table lamp', 'Smart bulbs'] },
+  'home-decor':     { name: 'Home Decor',              icon: 'frame',   essentials: ['Wall art', 'Cushions', 'Rugs', 'Mirrors'] },
+  storage:          { name: 'Storage & Organisation',  icon: 'box',     essentials: ['Shelving unit', 'Storage boxes', 'Closet organiser', 'Baskets'] },
+  'home-textiles':  { name: 'Home Textiles',           icon: 'blanket', essentials: ['Duvet set', 'Curtains', 'Towels', 'Throws'] },
+  'garden-outdoor': { name: 'Garden & Outdoor',        icon: 'plant',   essentials: ['Garden furniture', 'Parasol', 'BBQ', 'Planters'] },
+
+  // ---- Technology ----
+  smartphones:          { name: 'Smartphones',              icon: 'phone',    essentials: ['Phone', 'Case', 'Screen protector', 'Charger'] },
+  'laptops-computers':  { name: 'Laptops & Computers',      icon: 'laptop',   essentials: ['Laptop', 'Mouse', 'Monitor', 'Backpack'] },
+  wearables:            { name: 'Wearables & Smartwatches', icon: 'watch',    essentials: ['Smartwatch', 'Fitness band', 'Charging dock', 'Strap'] },
+  'audio-headphones':   { name: 'Audio & Headphones',       icon: 'headphones', essentials: ['Headphones', 'Earbuds', 'Speaker', 'DAC'] },
+  'tv-video':           { name: 'TV & Video',               icon: 'tv',       essentials: ['Television', 'Soundbar', 'Streaming stick', 'Wall mount'] },
+  cameras:              { name: 'Cameras',                  icon: 'camera',   essentials: ['Camera body', 'Lens', 'Memory card', 'Tripod'] },
+  gaming:               { name: 'Gaming',                   icon: 'gamepad',  essentials: ['Console', 'Controller', 'Headset', 'Games'] },
+  'home-appliances':    { name: 'Home Appliances',          icon: 'appliance', essentials: ['Vacuum cleaner', 'Air fryer', 'Coffee machine', 'Blender'] },
 };
 
 const CATEGORY_META: Record<Category, { name: string; blurb: string }> = {
-  sport: { name: 'Sport', blurb: 'Vind de juiste spullen voor de sport die je écht doet — met de prijs van elke winkel naast elkaar.' },
-  home:  { name: 'Wonen', blurb: 'Binnenkort — we beginnen met sport en breiden daarna uit.' },
-  tech:  { name: 'Techniek', blurb: 'Binnenkort — we beginnen met sport en breiden daarna uit.' },
+  sport: { name: 'Sport', blurb: 'Find the right gear for the sport you actually do, with every store’s price side by side.' },
+  home:  { name: 'Home & Furniture', blurb: 'Furnish every room and compare the same sofa, table or lamp across every store.' },
+  tech:  { name: 'Technology', blurb: 'See what a phone, laptop or TV really costs across every major store.' },
 };
 
 export async function getCategory(cat: string): Promise<CategoryPage | null> {

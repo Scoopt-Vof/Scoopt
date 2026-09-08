@@ -3,9 +3,11 @@
 A complete, working vertical slice: database → ingestion → API → tests.
 Everything runs. Nothing here is a sketch.
 
-Prices come from **eBay** only (see `README-LIVE-APIS.md`); **Icecat** enriches
-products with images, descriptions and specs but carries no prices. No other
-source may produce data on the site.
+Prices come from **eBay** only (see `README-LIVE-APIS.md`); **Icecat** supplies
+the catalogue itself — product rows with a real manufacturer image, name and
+specs, created straight from Icecat's data with no price attached — and also
+enriches products a retailer feed already found (see `README-ICECAT.md`). No
+source may invent a price; Icecat carries none at all.
 
 Sources with invented prices are refused on the write path in
 `src/ingest/run.ts` unless `ALLOW_SYNTHETIC_SOURCES=1`, which only the test
@@ -121,6 +123,9 @@ Supabase dashboard → **Table Editor**. You'll see `product`, `offer`,
 db/001_schema.sql          the database. money as integer cents, price history append-only
 db/002_contract_fields.sql the extra fields the front-end contract needs
 db/003_rls.sql             row level security, so Supabase's public API exposes nothing
+db/006_subcategory_english_ids.sql  one-time fix: real subcategory ids instead of search phrases
+src/ingest/discover-icecat.ts       creates NEW products straight from Icecat, no price yet
+src/ingest/list-icecat-categories.ts   finds real Icecat category IDs for discover-icecat.ts
 src/contract/types.ts      the shapes the API returns  ← replaced by Josh's contract later
 src/contract/schemas.ts    Zod mirrors + the invariants written down as code
 src/sources/types.ts       the RetailerSource interface  ← THE SWAP POINT
