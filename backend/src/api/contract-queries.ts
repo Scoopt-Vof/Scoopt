@@ -192,6 +192,7 @@ const CATEGORY_META: Record<Category, { name: string; blurb: string }> = {
   sport: { name: 'Sport', blurb: 'Find the right gear for the sport you actually do, with every store’s price side by side.' },
   home:  { name: 'Home & Furniture', blurb: 'Furnish every room and compare the same sofa, table or lamp across every store.' },
   tech:  { name: 'Technology', blurb: 'See what a phone, laptop or TV really costs across every major store.' },
+}
 };
 
 export async function getCategory(cat: string): Promise<CategoryPage | null> {
