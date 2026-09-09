@@ -1,29 +1,35 @@
 /**
- * ICECAT CATEGORY LOOKUP — a read-only helper, not part of the ingest pipeline.
+ * ICECAT CATEGORY REFERENCE — a read-only helper, not part of the ingest pipeline.
  * -----------------------------------------------------------------------------
- * discover-icecat.ts (the actual catalogue pull) needs to know which Icecat
- * category IDs correspond to Scoopt's subcategories ("Smartphones", "Laptops
- * & Computers", ...). Those numeric IDs are Icecat's own and must come from
- * Icecat's real reference data — guessing them would risk silently pulling
- * the wrong vertical (or nothing at all) into a subcategory.
+ * Two jobs:
  *
- * This script fetches Icecat's public category reference file and prints
- * every category whose name matches your search term, with its numeric ID,
- * so you can fill in ICECAT_CATEGORY_MAP in discover-icecat.ts with real
- * values instead of placeholders.
+ *   1. `fetchIcecatCategoryNames()` — used by discover-icecat.ts's report mode
+ *      to put a human-readable name next to each Icecat category id it found,
+ *      so filling in the map is reading a list rather than guessing.
+ *
+ *   2. A CLI to search that reference list by name, for when you have a name
+ *      and want the id (the reverse of the usual direction).
+ *
+ * NOTE ON WORKFLOW — this is no longer the way to build the category map.
+ * Searching thirteen guessed terms up front maps ids that may not appear in
+ * this account's catalogue at all, and misses the ones that dominate it. The
+ * better order is:
+ *
+ *     npm run discover:icecat            # report only: which ids actually occur
+ *     npm run icecat:map -- --set 4=tech/smartphones
+ *
+ * i.e. let the real data tell you which ids matter, in descending order of how
+ * many products carry them. This CLI stays useful as a lookup — "what id is
+ * 'Coffee machine'?" — not as the starting point.
  *
  * Run:
  *   npm run icecat:categories -- --search Smartphone
- *   npm run icecat:categories -- --search "Notebook"
  *   npm run icecat:categories                        (prints everything — long)
  *
- * UNVERIFIED — same caveat as ../sources/icecat.ts and README-ICECAT.md: this
- * is written from Icecat's published manuals (the reference file is documented
- * at https://iceclog.com/open-catalog-interface-oci-open-icecat-xml-and-full-icecat-xml-repositories/),
- * not confirmed against a live download. If the fetch fails or the shape
- * printed below looks wrong, that manual is the next thing to check, and the
- * fallback is reading the category names/IDs straight from a product page in
- * your MyIcecat account instead.
+ * UNVERIFIED: the reference file path below is from Icecat's published manuals
+ * (https://iceclog.com/open-catalog-interface-oci-open-icecat-xml-and-full-icecat-xml-repositories/),
+ * not confirmed against a live download. If the fetch fails, the fallback is
+ * reading category names/ids straight from a product page in MyIcecat.
  */
 
 import { gunzipSync } from 'node:zlib';
@@ -32,7 +38,7 @@ import { gunzipSync } from 'node:zlib';
 // is documented as the general (not brand-specific) categories reference.
 const CATEGORIES_URL = 'https://data.icecat.biz/export/freexml.int/refs/CategoriesList.xml.gz';
 
-interface CategoryRow {
+export interface CategoryRow {
   id: string;
   name: string;
 }
@@ -41,7 +47,7 @@ interface CategoryRow {
  *  Value="..."/></Category>-shaped rows. No XML parser is in package.json
  *  yet, and this file only needs id+name pairs, not a full parse — if
  *  Icecat's real shape differs, this regex is the first thing to adjust. */
-function extractCategories(xml: string): CategoryRow[] {
+export function extractCategories(xml: string): CategoryRow[] {
   const rows: CategoryRow[] = [];
   const categoryBlocks = xml.match(/<Category\b[^>]*>[\s\S]*?<\/Category>/g) ?? [];
   for (const block of categoryBlocks) {
@@ -55,14 +61,7 @@ function extractCategories(xml: string): CategoryRow[] {
   return rows;
 }
 
-async function main() {
-  const args = process.argv.slice(2).filter((a) => a !== '--');
-  const searchFlag = args.indexOf('--search');
-  const search = searchFlag !== -1 ? args[searchFlag + 1]?.toLowerCase() : null;
-
-  console.log(`\nFetching Icecat's category reference list...`);
-  console.log(`  ${CATEGORIES_URL}\n`);
-
+export async function fetchCategoryRows(): Promise<CategoryRow[]> {
   const res = await fetch(CATEGORIES_URL, {
     headers: { 'user-agent': process.env.HTTP_USER_AGENT ?? 'Scoopt/0.1' },
   });
@@ -74,10 +73,34 @@ async function main() {
       `names/IDs directly from a product page in your MyIcecat account.`
     );
   }
-  const gz = Buffer.from(await res.arrayBuffer());
-  const xml = gunzipSync(gz).toString('utf8');
+  const xml = gunzipSync(Buffer.from(await res.arrayBuffer())).toString('utf8');
+  return extractCategories(xml);
+}
 
-  const rows = extractCategories(xml);
+/** id -> English name, for annotating a report. Never throws: a missing
+ *  reference file should degrade a report to "ids without names", not kill it. */
+export async function fetchIcecatCategoryNames(): Promise<Map<string, string>> {
+  try {
+    const rows = await fetchCategoryRows();
+    return new Map(rows.map((r) => [r.id, r.name]));
+  } catch (err) {
+    console.warn(
+      `  (couldn't fetch Icecat's category names: ${String(err).split('\n')[0]} — ` +
+      `showing ids only)`
+    );
+    return new Map();
+  }
+}
+
+async function main() {
+  const args = process.argv.slice(2).filter((a) => a !== '--');
+  const searchFlag = args.indexOf('--search');
+  const search = searchFlag !== -1 ? args[searchFlag + 1]?.toLowerCase() : null;
+
+  console.log(`\nFetching Icecat's category reference list...`);
+  console.log(`  ${CATEGORIES_URL}\n`);
+
+  const rows = await fetchCategoryRows();
   console.log(`Parsed ${rows.length} categories.\n`);
 
   const filtered = search ? rows.filter((r) => r.name.toLowerCase().includes(search)) : rows;
@@ -91,11 +114,19 @@ async function main() {
     console.log(`  ... and ${filtered.length - 200} more. Narrow with --search.`);
   }
   console.log(
-    `\nCopy the IDs you need into ICECAT_CATEGORY_MAP in src/ingest/discover-icecat.ts.`
+    `\nStore a mapping with:\n` +
+    `  npm run icecat:map -- --set <id>=<category>/<subcategory>\n` +
+    `(Mappings live in the source_category_map table, not in code.)\n`
   );
 }
 
-main().catch((err) => {
-  console.error('\nfailed:', String(err));
-  process.exit(1);
-});
+const isMain =
+  process.argv[1]?.endsWith('list-icecat-categories.ts') ||
+  process.argv[1]?.endsWith('list-icecat-categories.js');
+
+if (isMain) {
+  main().catch((err) => {
+    console.error('\nfailed:', String(err));
+    process.exit(1);
+  });
+}

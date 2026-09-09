@@ -110,11 +110,16 @@ export async function ingest(source: RetailerSource): Promise<IngestSummary> {
       // is a job for the review queue, not for whichever feed ran last.
       const [product] = await sql<{ id: number }[]>`
         insert into product (ean, brand, title, category, image_url, description, status,
-                             contract_id, unit, subcategory, specs)
+                             contract_id, unit, subcategory, specs,
+                             created_by_source, category_source)
         values (${ean}, ${raw.brand}, ${raw.title}, ${raw.category},
                 ${raw.imageUrl ?? null}, ${raw.description ?? null}, 'published',
                 ${raw.contractId ?? null}, ${raw.unit ?? null}, ${raw.subcategory ?? null},
-                ${sql.json(raw.specs ?? {})})
+                ${sql.json(raw.specs ?? {})},
+                -- Provenance: which pass created the row, and where its
+                -- category came from. 'feed' is honest — it's whatever this
+                -- retailer claimed, not a manufacturer taxonomy.
+                ${source.slug}, 'feed')
         on conflict (ean) do update
           set image_url   = coalesce(product.image_url, excluded.image_url),
               description = coalesce(product.description, excluded.description),
@@ -124,6 +129,14 @@ export async function ingest(source: RetailerSource): Promise<IngestSummary> {
               -- Merge rather than replace: a second retailer may know a spec the
               -- first one didn't, and losing it would silently degrade ranking.
               specs       = product.specs || excluded.specs,
+              -- PROMOTION. discover-icecat.ts creates catalogue rows as 'draft'
+              -- precisely because they have no offer, and the API serves only
+              -- 'published'. This is the moment that changes: a real retailer
+              -- offer is about to attach, so the product becomes buyable and
+              -- publishable in the same breath. 'suppressed' is a human
+              -- decision and is left alone.
+              status      = case when product.status = 'draft' then 'published'
+                                 else product.status end,
               updated_at  = now()
         returning id
       `;

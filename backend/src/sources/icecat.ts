@@ -4,10 +4,11 @@ import { fetchJson, requireEnv } from '../lib/http';
  * Icecat product-content lookup, by GTIN/EAN.
  *
  * Icecat is NOT a RetailerSource (see ./types.ts / ./registry.ts) — it has
- * no price, stock or store to attribute an offer to. It enriches product
- * rows that a retailer feed (eBay etc.) already created with the
- * manufacturer's own image, description and specs. See
- * ../ingest/enrich-icecat.ts for the pass that calls this.
+ * no price, stock or store to attribute an offer to. It supplies three things
+ * for products that already exist: the manufacturer's IMAGE (the primary
+ * reason it's here — eBay and affiliate feeds give inconsistent seller
+ * photos), the description/specs, and the manufacturer's own CATEGORY, which
+ * feeds stage 1 of categorisation. See ../ingest/enrich-icecat.ts.
  *
  * Auth: header-based dynamic tokens, the method Icecat's own docs mark
  * "recommended" over the legacy static app_key. Generate both at
@@ -35,6 +36,15 @@ export interface IcecatProduct {
     imageUrlHigh: string | null;
     description: string | null;
     specs: Record<string, string>;
+    /** Icecat's OWN category id for this product, stored raw on the product row.
+     *  This is the stage-1 categorisation signal: it comes from the
+     *  manufacturer's data sheet rather than from a seller picking a dropdown,
+     *  which is exactly why eBay's category ids were rejected as a mapping
+     *  source and this one wasn't. Mapped to a Scoopt subcategory through
+     *  source_category_map — never mapped here, so a mapping change never
+     *  requires re-fetching from Icecat. */
+    categoryId: string | null;
+    categoryName: string | null;
 }
 
 interface IcecatFeature {
@@ -46,7 +56,11 @@ interface IcecatFeature {
 interface IcecatApiResponse {
     msg?: string;
     data?: {
-      GeneralInfo?: { Title?: string; ProductName?: string };
+      GeneralInfo?: {
+        Title?: string;
+        ProductName?: string;
+        Category?: { CategoryID?: string | number; Name?: { Value?: string } | string };
+      };
       Image?: { HighPic?: string; Pic500x500?: string; LowPic?: string; ThumbPic?: string };
       Description?: { LongDesc?: string; MiddleDesc?: string };
       FeaturesGroups?: { Features?: IcecatFeature[] }[];
@@ -103,8 +117,17 @@ export async function fetchIcecatProduct(gtin: string): Promise<IcecatProduct | 
           }
     }
 
+  // Icecat's manuals show Category.Name as a { Value } object; some responses
+    // are reported to inline it as a plain string. Accept both rather than lose
+    // the label over a shape difference.
+    const rawCategory = data.GeneralInfo?.Category;
+    const categoryName =
+        typeof rawCategory?.Name === 'string' ? rawCategory.Name : rawCategory?.Name?.Value ?? null;
+
   return {
         title: data.GeneralInfo?.Title ?? data.GeneralInfo?.ProductName ?? null,
+        categoryId: rawCategory?.CategoryID != null ? String(rawCategory.CategoryID) : null,
+        categoryName,
         imageUrl: image.Pic500x500 ?? image.HighPic ?? image.LowPic ?? null,
         imageUrlHigh: image.HighPic ?? null,
         description: data.Description?.LongDesc ?? data.Description?.MiddleDesc ?? null,
