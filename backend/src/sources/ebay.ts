@@ -89,6 +89,11 @@ interface EbayItem {
   gtin?: string;
   mpn?: string;
   brand?: string;
+  /** eBay's own numeric category id. This is the structured category signal
+   *  the classifier's stage 1 maps; see src/categorisation/stage-source.ts.
+   *  It was previously not read at all, even though getItem already returns
+   *  it and we were already paying for that call. */
+  categoryId?: string;
   categoryPath?: string;
   itemWebUrl: string;
   image?: { imageUrl?: string };
@@ -209,6 +214,12 @@ function toRawOffer(item: EbayItem, q: EbayQuery): RawOffer | null {
     productUrl: item.itemWebUrl,
     imageUrl: item.image?.imageUrl ?? null,
     description: item.shortDescription ?? null,
+    // The category SIGNAL, not a category decision. q.category/q.subcategory
+    // above remain as the discovery tag; which shelf this actually lands on
+    // is settled by the classifier against source_category_map.
+    sourceCategoryKey: item.categoryId ?? null,
+    sourceCategoryLabel: item.categoryPath ?? null,
+    condition: item.condition ?? null,
   };
 }
 

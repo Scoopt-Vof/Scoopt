@@ -28,6 +28,13 @@ beforeAll(async () => {
   await ingest(cheaper);               // 92%  ← should always win
   await ingest(dearer);                // 110%
 
+  // Products now enter as 'draft' and are promoted by the classifier's publish
+  // gate (see src/ingest/run.ts and src/categorisation/persist.ts). These tests
+  // exercise the PRICE path with a fixture catalogue and pass no classifier, so
+  // nothing promotes them — publish them explicitly. Classification has its own
+  // suite in categorisation.test.ts.
+  await sql`update product set status = 'published' where status = 'draft'`;
+
   const [row] = await sql<{ id: number }[]>`select id from product order by id limit 1`;
   productId = String(row.id);
 }, 60_000);

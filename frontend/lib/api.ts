@@ -42,6 +42,43 @@ export async function fetchCategory(cat: string): Promise<CategoryPage | null> {
   return res.json();
 }
 
+// ---------------------------------------------------------------------------
+// Category browse (the taxonomy read path)
+// ---------------------------------------------------------------------------
+// Replaces the old pattern of calling searchProducts("") and filtering the
+// result in JavaScript. That call returns the 200 OLDEST products in the whole
+// catalogue, so categories silently empty out as new products are ingested.
+// This asks the database for the category, with paging.
+
+export interface CategoryProductsPage {
+  path: string;
+  total: number;
+  limit: number;
+  offset: number;
+  products: (Product & { tags: string[]; minPrice: number | null; offerCount: number })[];
+}
+
+export async function fetchCategoryProducts(
+  path: string,
+  opts: { limit?: number; offset?: number; tags?: string[] } = {}
+): Promise<CategoryProductsPage | null> {
+  const qs = new URLSearchParams();
+  if (opts.limit !== undefined) qs.set("limit", String(opts.limit));
+  if (opts.offset !== undefined) qs.set("offset", String(opts.offset));
+  if (opts.tags?.length) qs.set("tags", opts.tags.join(","));
+  const query = qs.toString() ? `?${qs}` : "";
+
+  const res = await fetch(`${base}/api/categories/${path}/products${query}`, {
+    cache: "no-store",
+  });
+  if (res.status === 404) return null;
+  // A misconfigured or unreachable backend returns 502/503 here. Return null
+  // rather than throwing: the category page still has its subcategory tiles to
+  // render, and an empty product grid is honest.
+  if (!res.ok) return null;
+  return res.json();
+}
+
 export async function compareBasket(items: string[]): Promise<BasketResult> {
   const body: BasketRequest = { items };
   const res = await fetch(`${base}/api/basket/compare`, {

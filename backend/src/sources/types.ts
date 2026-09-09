@@ -48,6 +48,18 @@ export interface RawOffer {
   subcategory?: string;
   /** Product.specs — the key/value bag personalisation ranks on. */
   specs?: Record<string, string>;
+
+  // ---- Source category signal (added with the categorisation system) -------
+  // The source's OWN category key for this row, passed straight through to
+  // the classifier's stage 1. Never interpreted here: 'ebay' means an eBay
+  // category id, and what it maps to is a row in source_category_map, not a
+  // decision this adapter is allowed to make.
+  /** The source's own numeric category id or breadcrumb key, as text. */
+  sourceCategoryKey?: string | null;
+  /** Human-readable label for that key, e.g. eBay's categoryPath. */
+  sourceCategoryLabel?: string | null;
+  /** Condition as the source states it — becomes a tag, not a category. */
+  condition?: string | null;
 }
 
 export interface FetchResult {
