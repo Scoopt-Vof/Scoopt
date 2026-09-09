@@ -166,3 +166,12 @@ exception
 end $$;
 
 commit;
+
+-- ---------------------------------------------------------------------------
+-- Lock these tables against Supabase's public API — see 003_rls.sql.
+-- ---------------------------------------------------------------------------
+begin;
+alter table product_category       enable row level security;
+alter table product_tag            enable row level security;
+alter table product_classification enable row level security;
+commit;

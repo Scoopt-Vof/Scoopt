@@ -292,7 +292,11 @@ begin
     copied, total, legacy;
 end $$;
 
-create or replace view v_source_mapping_coverage as
+-- security_invoker: a view runs with the DEFINER's rights by default, which
+-- would read straight past the row level security enabled below. This makes
+-- the caller's own permissions apply instead.
+create or replace view v_source_mapping_coverage
+  with (security_invoker = true) as
   select s.source_key,
          (select count(*) from source_category_map m
            where m.source_key = s.source_key) as mapped_keys,
@@ -302,4 +306,17 @@ create or replace view v_source_mapping_coverage as
            where u.source_key = s.source_key) as unmapped_hits
     from source s;
 
+commit;
+
+-- ---------------------------------------------------------------------------
+-- Lock these tables against Supabase's public API — see 003_rls.sql.
+-- ---------------------------------------------------------------------------
+-- The mapping layer is internal: nothing outside the back end should read it,
+-- and the unmapped queue in particular is an operational work list.
+begin;
+alter table source                    enable row level security;
+alter table source_category           enable row level security;
+alter table source_category_map       enable row level security;
+alter table source_category_unmapped  enable row level security;
+alter table category_source_precedence enable row level security;
 commit;
