@@ -1,6 +1,10 @@
 node_modules/
 .env
 .env.local
+# Any other env file — .env.test and friends hold real credentials and must
+# never be committed.
+.env.*
+!.env.example
 raw/
 *.log
 .DS_Store

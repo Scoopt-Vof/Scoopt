@@ -22,6 +22,56 @@
 begin;
 
 -- ---------------------------------------------------------------------------
+-- FIRST: get out of the way of an earlier categorisation attempt.
+-- ---------------------------------------------------------------------------
+-- A previous design used the same table NAMES with a different shape — a flat
+-- source_category_map keyed on (source, source_category_id), holding category
+-- and subcategory as plain text. `create table if not exists` sees the name,
+-- assumes the table is ours, skips creation, and then everything downstream
+-- fails on a column that is not there: "column m.source_key does not exist".
+--
+-- So: any table carrying one of our names that does NOT have the column we
+-- expect is RENAMED ASIDE, never dropped. Whatever mapping work is in it
+-- survives and stays inspectable, and the rows that can be translated are
+-- copied into the new table at the end of this file.
+--
+-- Safe to re-run: after the first pass the real tables have the right columns,
+-- so this block does nothing on every later run.
+do $$
+declare
+  t      record;
+  target text;
+  n      int;
+begin
+  for t in
+    select * from (values
+      ('source',             'source_key'),
+      ('source_category',    'source_key'),
+      ('source_category_map','source_key')
+    ) as v(tbl, required_column)
+  loop
+    if to_regclass('public.' || t.tbl) is not null
+       and not exists (
+         select 1 from information_schema.columns
+          where table_schema = 'public' and table_name = t.tbl
+            and column_name = t.required_column)
+    then
+      target := t.tbl || '_legacy';
+      n := 0;
+      while to_regclass('public.' || target) is not null loop
+        n := n + 1;
+        target := t.tbl || '_legacy_' || n;
+      end loop;
+
+      execute format('alter table public.%I rename to %I', t.tbl, target);
+      raise notice
+        'renamed pre-existing "%" (no % column) to "%" - its rows are kept; see the end of this migration',
+        t.tbl, t.required_column, target;
+    end if;
+  end loop;
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- source
 -- ---------------------------------------------------------------------------
 create table if not exists source (
@@ -198,6 +248,50 @@ $$;
 -- Mapping coverage per source: the number to alert on. A feed that normally
 -- maps ninety-four percent of its keys and suddenly maps sixty has changed
 -- shape, and we want to know that day rather than next month.
+-- ---------------------------------------------------------------------------
+-- Carry across whatever the earlier attempt had mapped.
+-- ---------------------------------------------------------------------------
+-- The old shape stored category/subcategory as two text columns; the new one
+-- points at a real node in the tree. A legacy row is copied when its
+-- category/subcategory resolve to a path that actually exists AND its source
+-- is one we know about. Anything that does not resolve is LEFT IN THE LEGACY
+-- TABLE rather than guessed at - an unresolved row is a question for a person,
+-- not something to invent an answer for.
+do $$
+declare
+  legacy text;
+  copied bigint;
+  total  bigint;
+begin
+  select c.relname into legacy
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public' and c.relkind = 'r'
+     and c.relname like 'source\_category\_map\_legacy%'
+   order by c.relname limit 1;
+
+  if legacy is null then return; end if;
+
+  execute format('select count(*) from public.%I', legacy) into total;
+
+  execute format(
+    'insert into source_category_map '
+    '  (source_key, external_key, external_label, category_id, confidence, reviewed_by) '
+    'select l.source, l.source_category_id, l.source_category_name, cat.id, 0.900, %L '
+    '  from public.%I l '
+    '  join source s on s.source_key = l.source '
+    '  join category cat on cat.path = case '
+    '       when coalesce(l.subcategory, %L) = %L then l.category '
+    '       else l.category || %L || l.subcategory end '
+    ' where l.source_category_id is not null '
+    'on conflict (source_key, external_key) do nothing',
+    'carried over from ' || legacy, legacy, '', '', '/');
+
+  get diagnostics copied = row_count;
+  raise notice
+    'carried over % of % row(s) from "%" into source_category_map; the rest stay there for review',
+    copied, total, legacy;
+end $$;
+
 create or replace view v_source_mapping_coverage as
   select s.source_key,
          (select count(*) from source_category_map m

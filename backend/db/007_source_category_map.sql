@@ -41,22 +41,23 @@
 
 begin;
 
-create table if not exists source_category_map (
-  source              text        not null,          -- 'icecat' | 'awin' | 'bol' | ...
-  source_category_id  text        not null,          -- their id, as a string
-  source_category_name text,                         -- their label, for humans
-  category            text        not null
-                      check (category in ('home', 'sport', 'tech')),
-  subcategory         text        not null,          -- must match SUBCATEGORY_META
-  notes               text,
-  created_at          timestamptz not null default now(),
-  updated_at          timestamptz not null default now(),
-
-  primary key (source, source_category_id)
-);
-
-create index if not exists source_category_map_target_idx
-  on source_category_map (category, subcategory);
+-- ---------------------------------------------------------------------------
+-- SUPERSEDED: the source_category_map table that used to be created here.
+-- ---------------------------------------------------------------------------
+-- This file originally created a flat source_category_map keyed on
+-- (source, source_category_id), holding category and subcategory as plain
+-- text. db/009_sources.sql now creates a source_category_map of its own,
+-- keyed on (source_key, external_key) and pointing at a real node in the
+-- category tree, which is what the whole classifier reads.
+--
+-- Creating the old one here as well is actively harmful: it runs BEFORE 009
+-- (files are applied in filename order), so 009 would find a table with the
+-- right name and the wrong shape on every fresh database, and the index below
+-- it referenced columns the new table does not have — failing every re-run.
+--
+-- So the table creation is removed rather than the file: an existing database
+-- still has the old table, and 009 renames it aside and carries its rows over.
+-- The product columns below are still wanted and are untouched.
 
 alter table product add column if not exists icecat_category_id   text;
 alter table product add column if not exists icecat_category_name text;
