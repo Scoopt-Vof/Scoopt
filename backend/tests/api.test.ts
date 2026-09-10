@@ -19,6 +19,13 @@ beforeAll(async () => {
   const summary = await ingest(new TestCatalogueSource());
   expect(summary.offersUpserted).toBeGreaterThan(0);
 
+  // Products now enter as 'draft' and are promoted by the classifier's publish
+  // gate (see src/ingest/run.ts and src/categorisation/persist.ts). These tests
+  // exercise the PRICE path with a fixture catalogue and pass no classifier, so
+  // nothing promotes them — publish them explicitly. Classification has its own
+  // suite in categorisation.test.ts.
+  await sql`update product set status = 'published' where status = 'draft'`;
+
   const [row] = await sql<{ id: number }[]>`select id from product order by id limit 1`;
   anyProductId = String(row.id);
 }, 30_000);
@@ -133,7 +140,7 @@ describe('ingestion behaviour', () => {
     const { writeFile } = await import('node:fs/promises');
     await writeFile(junkPath, JSON.stringify({ products: [{
       retailerSku: 'JUNK-1', ean: 'N/A', brand: 'Testmerk', title: 'Broken row',
-      category: 'hardlopen', priceCents: 1999, inStock: true,
+      category: 'sport', priceCents: 1999, inStock: true,
       productUrl: 'https://retailer.invalid/p/x',
     }] }));
 

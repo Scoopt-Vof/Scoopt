@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Scoopt back end \u2014 ingestion, API and data quality. Prices come from retailer feeds (eBay now, Awin/Bol next); Icecat supplies product images, specs and the manufacturer category.",
+  "description": "Scoopt back end \u2014 ingestion, API and data quality. Prices come from eBay; Icecat enriches them.",
   "scripts": {
     "start": "tsx src/server.ts",
     "db:migrate": "node --env-file=.env scripts/migrate.mjs",
@@ -16,11 +16,14 @@
     "ingest:all": "tsx --env-file=.env src/ingest/run.ts all",
     "enrich:icecat": "tsx --env-file=.env src/ingest/enrich-icecat.ts",
     "icecat:categories": "tsx --env-file=.env src/ingest/list-icecat-categories.ts",
-    "icecat:map": "tsx --env-file=.env src/ingest/icecat-map.ts",
-    "icecat:verify": "tsx --env-file=.env src/ingest/verify-icecat.ts",
     "discover:icecat": "tsx --env-file=.env src/ingest/discover-icecat.ts",
     "serve": "tsx --env-file=.env src/contract-server.ts",
-    "trial": "npm run db:migrate && npm run serve"
+    "trial": "npm run db:migrate && npm run serve",
+    "backfill:categories": "tsx --env-file=.env scripts/backfill-categories.ts",
+    "import:categories": "tsx --env-file=.env scripts/import-source-categories.ts",
+    "propose:mappings": "tsx --env-file=.env scripts/propose-source-mappings.ts",
+    "backfill:source": "tsx --env-file=.env scripts/backfill-source-categories.ts",
+    "categorise:setup": "node --env-file=.env scripts/setup-source-categories.mjs"
   },
   "dependencies": {
     "postgres": "^3.4.5",

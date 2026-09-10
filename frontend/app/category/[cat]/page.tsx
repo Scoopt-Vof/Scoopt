@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { fetchCategory, searchProducts } from "@/lib/api";
+import { fetchCategory, fetchCategoryProducts } from "@/lib/api";
 import PersonalisedGrid from "@/components/PersonalisedGrid";
 
 // A Server Component that fetches data on the server before rendering.
@@ -14,9 +14,12 @@ export default async function CategoryPage({
   const page = await fetchCategory(cat);
   if (!page) notFound();
 
-  // Show a few example products from this category too (fake data for now).
-  const all = await searchProducts("");
-  const products = all.filter((p) => p.category === page.category);
+  // Products in this category and everything below it, straight from the
+  // database. This used to be searchProducts("") filtered in JavaScript, which
+  // only ever saw the 200 oldest products in the whole catalogue and so lost
+  // whole categories as the catalogue grew.
+  const productPage = await fetchCategoryProducts(cat, { limit: 48 });
+  const products = productPage?.products ?? [];
 
   return (
     <>
@@ -43,6 +46,9 @@ export default async function CategoryPage({
         <>
           <h2 className="section-h" style={{ marginTop: 26 }}>
             Products in {page.name.toLowerCase()}
+            {productPage && productPage.total > products.length
+              ? ` (showing ${products.length} of ${productPage.total})`
+              : ""}
           </h2>
           <PersonalisedGrid products={products} />
         </>
