@@ -19,7 +19,11 @@
     "discover:icecat": "tsx --env-file=.env src/ingest/discover-icecat.ts",
     "serve": "tsx --env-file=.env src/contract-server.ts",
     "trial": "npm run db:migrate && npm run serve",
-    "backfill:categories": "tsx --env-file=.env scripts/backfill-categories.ts"
+    "backfill:categories": "tsx --env-file=.env scripts/backfill-categories.ts",
+    "import:categories": "tsx --env-file=.env scripts/import-source-categories.ts",
+    "propose:mappings": "tsx --env-file=.env scripts/propose-source-mappings.ts",
+    "backfill:source": "tsx --env-file=.env scripts/backfill-source-categories.ts",
+    "categorise:setup": "node --env-file=.env scripts/setup-source-categories.mjs"
   },
   "dependencies": {
     "postgres": "^3.4.5",

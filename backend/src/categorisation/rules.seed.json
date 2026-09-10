@@ -17,279 +17,1009 @@
     "tests/categorisation.test.ts BEFORE it becomes a rule here. That single habit is",
     "the difference between a rule engine and a swamp."
   ],
-
   "categoryRules": [
     {
       "id": "headphones",
       "category": "tech/audio-headphones",
       "priority": 10,
-      "any": ["headphones", "koptelefoon", "earbuds", "oordopjes", "in ear", "over ear", "headset", "earphones"],
-      "none": ["case", "hoesje", "cover", "ear tips", "oorkussens", "ear pads", "stand", "houder", "cable only", "replacement cable"],
-      "tags": ["wireless"],
+      "any": [
+        "headphones",
+        "koptelefoon",
+        "earbuds",
+        "oordopjes",
+        "in ear",
+        "over ear",
+        "headset",
+        "earphones"
+      ],
+      "none": [
+        "case",
+        "hoesje",
+        "cover",
+        "ear tips",
+        "oorkussens",
+        "ear pads",
+        "stand",
+        "houder",
+        "cable only",
+        "replacement cable"
+      ],
+      "tags": [
+        "wireless"
+      ],
       "confidence": 0.86
     },
     {
       "id": "speaker",
       "category": "tech/audio-headphones",
       "priority": 9,
-      "any": ["bluetooth speaker", "soundbar", "luidspreker", "speaker", "portable speaker"],
-      "none": ["stand", "bracket", "beugel", "mount", "cable", "kabel", "grill", "cover"],
+      "any": [
+        "bluetooth speaker",
+        "soundbar",
+        "luidspreker",
+        "speaker",
+        "portable speaker"
+      ],
+      "none": [
+        "stand",
+        "bracket",
+        "beugel",
+        "mount",
+        "cable",
+        "kabel",
+        "grill",
+        "cover"
+      ],
       "confidence": 0.83
     },
     {
       "id": "television",
       "category": "tech/tv-video",
       "priority": 10,
-      "any": ["television", "televisie", "smart tv", "oled tv", "qled", "led tv", "4k tv"],
-      "none": ["bracket", "beugel", "muurbeugel", "mount", "remote", "afstandsbediening", "stand", "cover"],
-      "tags": ["smart"],
+      "any": [
+        "television",
+        "televisie",
+        "smart tv",
+        "oled tv",
+        "qled",
+        "led tv",
+        "4k tv"
+      ],
+      "none": [
+        "bracket",
+        "beugel",
+        "muurbeugel",
+        "mount",
+        "remote",
+        "afstandsbediening",
+        "stand",
+        "cover"
+      ],
+      "tags": [
+        "smart"
+      ],
       "confidence": 0.88
     },
     {
       "id": "streaming-device",
       "category": "tech/tv-video",
       "priority": 8,
-      "any": ["streaming stick", "media player", "chromecast", "fire tv", "apple tv"],
-      "none": ["case", "hoesje", "remote cover"],
+      "any": [
+        "streaming stick",
+        "media player",
+        "chromecast",
+        "fire tv",
+        "apple tv",
+        "mediaplayer",
+        "streaming box",
+        "tv box",
+        "android tv",
+        "google tv",
+        "set top box"
+      ],
+      "none": [
+        "case",
+        "hoesje",
+        "remote cover"
+      ],
       "confidence": 0.82
     },
     {
       "id": "smartphone",
       "category": "tech/smartphones",
       "priority": 10,
-      "any": ["smartphone", "mobile phone", "mobiele telefoon", "re:\\biphone \\d", "galaxy s", "pixel \\d", "unlocked phone"],
-      "none": ["case", "hoesje", "cover", "screen protector", "screenprotector", "charger", "oplader", "cable", "kabel", "holder", "houder", "tempered glass", "sim tray"],
+      "any": [
+        "smartphone",
+        "mobile phone",
+        "mobiele telefoon",
+        "re:\\biphone \\d",
+        "galaxy s",
+        "pixel \\d",
+        "unlocked phone"
+      ],
+      "none": [
+        "case",
+        "hoesje",
+        "cover",
+        "screen protector",
+        "screenprotector",
+        "charger",
+        "oplader",
+        "cable",
+        "kabel",
+        "holder",
+        "houder",
+        "tempered glass",
+        "sim tray"
+      ],
       "confidence": 0.85
     },
     {
       "id": "laptop",
       "category": "tech/laptops-computers",
       "priority": 10,
-      "any": ["laptop", "notebook", "macbook", "chromebook", "ultrabook"],
-      "none": ["sleeve", "case", "hoes", "tas", "bag", "stand", "standaard", "charger", "oplader", "adapter", "screen protector", "keyboard cover", "skin"],
+      "any": [
+        "laptop",
+        "notebook",
+        "macbook",
+        "chromebook",
+        "ultrabook"
+      ],
+      "none": [
+        "sleeve",
+        "case",
+        "hoes",
+        "tas",
+        "bag",
+        "stand",
+        "standaard",
+        "charger",
+        "oplader",
+        "adapter",
+        "screen protector",
+        "keyboard cover",
+        "skin"
+      ],
       "confidence": 0.86
     },
     {
       "id": "desktop-components",
       "category": "tech/laptops-computers",
       "priority": 8,
-      "any": ["desktop pc", "graphics card", "videokaart", "motherboard", "moederbord", "processor", "ssd", "monitor", "beeldscherm"],
-      "none": ["stand", "mount", "beugel", "cable", "kabel", "cleaning"],
+      "any": [
+        "desktop pc",
+        "graphics card",
+        "videokaart",
+        "motherboard",
+        "moederbord",
+        "processor",
+        "ssd",
+        "monitor",
+        "beeldscherm"
+      ],
+      "none": [
+        "stand",
+        "mount",
+        "beugel",
+        "cable",
+        "kabel",
+        "cleaning"
+      ],
       "confidence": 0.8
     },
     {
       "id": "smartwatch",
       "category": "tech/wearables",
       "priority": 10,
-      "any": ["smartwatch", "fitness tracker", "activity tracker", "apple watch", "galaxy watch", "smartband"],
-      "none": ["strap", "bandje", "band only", "case", "hoesje", "screen protector", "charger", "oplader", "dock"],
+      "any": [
+        "smartwatch",
+        "fitness tracker",
+        "activity tracker",
+        "apple watch",
+        "galaxy watch",
+        "smartband"
+      ],
+      "none": [
+        "strap",
+        "bandje",
+        "band only",
+        "case",
+        "hoesje",
+        "screen protector",
+        "charger",
+        "oplader",
+        "dock"
+      ],
       "confidence": 0.86
     },
     {
       "id": "gps-sport-watch",
       "category": "tech/wearables",
       "priority": 11,
-      "any": ["gps watch", "gps horloge", "running watch", "hardloophorloge", "forerunner", "multisport watch"],
-      "none": ["strap", "bandje", "case", "hoesje", "charger", "oplader"],
-      "tags": ["gps"],
+      "any": [
+        "gps watch",
+        "gps horloge",
+        "running watch",
+        "hardloophorloge",
+        "forerunner",
+        "multisport watch"
+      ],
+      "none": [
+        "strap",
+        "bandje",
+        "case",
+        "hoesje",
+        "charger",
+        "oplader"
+      ],
+      "tags": [
+        "gps"
+      ],
       "confidence": 0.88
     },
     {
       "id": "camera",
       "category": "tech/cameras",
       "priority": 10,
-      "any": ["mirrorless camera", "dslr", "systeemcamera", "action camera", "gopro", "camera body", "compact camera"],
-      "none": ["bag", "tas", "case", "strap", "tripod", "statief", "memory card", "geheugenkaart", "lens cap", "filter"],
+      "any": [
+        "mirrorless camera",
+        "dslr",
+        "systeemcamera",
+        "action camera",
+        "gopro",
+        "camera body",
+        "compact camera",
+        "mirrorless",
+        "spiegelreflex",
+        "bridge camera"
+      ],
+      "none": [
+        "bag",
+        "tas",
+        "case",
+        "strap",
+        "tripod",
+        "statief",
+        "memory card",
+        "geheugenkaart",
+        "lens cap",
+        "filter"
+      ],
       "confidence": 0.85
     },
     {
       "id": "gaming-console",
       "category": "tech/gaming",
       "priority": 10,
-      "any": ["playstation", "xbox", "nintendo switch", "game console", "spelcomputer", "gaming console"],
-      "none": ["case", "hoesje", "skin", "stand", "charging dock", "cable", "kabel", "carry bag"],
+      "any": [
+        "playstation",
+        "xbox",
+        "nintendo switch",
+        "game console",
+        "spelcomputer",
+        "gaming console"
+      ],
+      "none": [
+        "case",
+        "hoesje",
+        "skin",
+        "stand",
+        "charging dock",
+        "cable",
+        "kabel",
+        "carry bag"
+      ],
       "confidence": 0.86
     },
     {
       "id": "gaming-accessory",
       "category": "tech/gaming",
       "priority": 9,
-      "any": ["controller", "gamepad", "joystick", "gaming headset", "gaming muis", "gaming mouse", "gaming keyboard"],
-      "none": ["stand only", "skin only"],
-      "tags": ["gaming"],
+      "any": [
+        "controller",
+        "gamepad",
+        "joystick",
+        "gaming headset",
+        "gaming muis",
+        "gaming mouse",
+        "gaming keyboard"
+      ],
+      "none": [
+        "stand only",
+        "skin only"
+      ],
+      "tags": [
+        "gaming"
+      ],
       "confidence": 0.8
     },
     {
       "id": "home-appliance",
       "category": "tech/home-appliances",
       "priority": 10,
-      "any": ["air fryer", "airfryer", "heteluchtfriteuse", "robot vacuum", "robotstofzuiger", "stofzuiger", "vacuum cleaner", "coffee machine", "koffiezetapparaat", "espressomachine", "blender", "waterkoker", "kettle", "magnetron", "microwave"],
-      "none": ["filter", "bag", "stofzuigerzak", "accessory", "accessoire", "replacement", "reserve", "cleaning kit", "descaler", "ontkalker"],
+      "any": [
+        "air fryer",
+        "airfryer",
+        "heteluchtfriteuse",
+        "robot vacuum",
+        "robotstofzuiger",
+        "stofzuiger",
+        "vacuum cleaner",
+        "coffee machine",
+        "koffiezetapparaat",
+        "espressomachine",
+        "blender",
+        "waterkoker",
+        "kettle",
+        "magnetron",
+        "microwave",
+        "hand mixer",
+        "handmixer",
+        "food mixer",
+        "staafmixer",
+        "toaster",
+        "broodrooster"
+      ],
+      "none": [
+        "filter",
+        "bag",
+        "stofzuigerzak",
+        "accessory",
+        "accessoire",
+        "replacement",
+        "reserve",
+        "cleaning kit",
+        "descaler",
+        "ontkalker"
+      ],
       "confidence": 0.86
     },
-
     {
       "id": "running-shoes",
       "category": "sport/running",
       "priority": 10,
-      "any": ["running shoes", "hardloopschoenen", "runningschoenen", "trail running shoe", "road running shoe"],
-      "none": ["laces", "veters", "insoles", "inlegzolen", "cleaner", "shoe bag"],
+      "any": [
+        "running shoes",
+        "hardloopschoenen",
+        "runningschoenen",
+        "trail running shoe",
+        "road running shoe",
+        "running trainers",
+        "trainers",
+        "sneakers",
+        "running shoe",
+        "trail running",
+        "runningschoen"
+      ],
+      "none": [
+        "laces",
+        "veters",
+        "insoles",
+        "inlegzolen",
+        "cleaner",
+        "shoe bag",
+        "watch",
+        "smartwatch",
+        "horloge",
+        "laptop",
+        "sock"
+      ],
       "confidence": 0.87
+    },
+    {
+      "id": "running-shoes-loose",
+      "category": "sport/running",
+      "priority": 9,
+      "any": [
+        "running",
+        "hardlopen"
+      ],
+      "all": [
+        "shoes"
+      ],
+      "none": [
+        "watch",
+        "smartwatch",
+        "horloge",
+        "laces",
+        "veters",
+        "insoles",
+        "inlegzolen",
+        "cleaner",
+        "shoe bag",
+        "football",
+        "voetbal",
+        "basketball",
+        "tennis",
+        "golf",
+        "ski",
+        "cycling",
+        "fiets"
+      ],
+      "confidence": 0.82
     },
     {
       "id": "running-apparel",
       "category": "sport/running",
       "priority": 8,
-      "any": ["running socks", "hardloopsokken", "running shorts", "hardloopbroek", "running tights", "heart rate monitor", "hartslagmeter"],
+      "any": [
+        "running socks",
+        "hardloopsokken",
+        "running shorts",
+        "hardloopbroek",
+        "running tights",
+        "heart rate monitor",
+        "hartslagmeter"
+      ],
       "confidence": 0.79
     },
     {
       "id": "cycling",
       "category": "sport/cycling",
       "priority": 10,
-      "any": ["road bike", "racefiets", "mountain bike", "mountainbike", "bike helmet", "fietshelm", "cycling shorts", "fietsbroek", "bike light", "fietslamp"],
-      "none": ["sticker", "keyring", "sleutelhanger", "miniature", "toy"],
+      "any": [
+        "road bike",
+        "racefiets",
+        "mountain bike",
+        "mountainbike",
+        "bike helmet",
+        "fietshelm",
+        "cycling shorts",
+        "fietsbroek",
+        "bike light",
+        "fietslamp"
+      ],
+      "none": [
+        "sticker",
+        "keyring",
+        "sleutelhanger",
+        "miniature",
+        "toy"
+      ],
       "confidence": 0.86
     },
     {
       "id": "hiking",
       "category": "sport/hiking-outdoor",
       "priority": 10,
-      "any": ["hiking boots", "wandelschoenen", "hiking backpack", "wandelrugzak", "trekking poles", "wandelstokken", "rain shell", "regenjas"],
-      "none": ["laces", "veters", "cleaner", "waterproofing spray"],
+      "any": [
+        "hiking boots",
+        "wandelschoenen",
+        "hiking backpack",
+        "wandelrugzak",
+        "trekking poles",
+        "wandelstokken",
+        "rain shell",
+        "regenjas",
+        "rucksack",
+        "backpack",
+        "daypack",
+        "fahrradrucksack",
+        "multi sport backpack",
+        "wandelschoen"
+      ],
+      "none": [
+        "laces",
+        "veters",
+        "cleaner",
+        "waterproofing spray",
+        "laptop",
+        "school",
+        "nappy",
+        "diaper",
+        "cooler",
+        "koeltas"
+      ],
       "confidence": 0.85
     },
     {
       "id": "fitness",
       "category": "sport/fitness-gym",
       "priority": 10,
-      "any": ["dumbbells", "dumbbell", "halterset", "yoga mat", "yogamat", "fitness mat", "resistance bands", "weerstandsbanden", "kettlebell"],
-      "none": ["rack only", "storage rack", "cover"],
+      "any": [
+        "dumbbells",
+        "dumbbell",
+        "halterset",
+        "yoga mat",
+        "yogamat",
+        "fitness mat",
+        "resistance bands",
+        "weerstandsbanden",
+        "kettlebell"
+      ],
+      "none": [
+        "rack only",
+        "storage rack",
+        "cover"
+      ],
       "confidence": 0.85
     },
     {
       "id": "swimming",
       "category": "sport/swimming",
       "priority": 10,
-      "any": ["swimming goggles", "zwembril", "swim fins", "zwemvliezen", "swim cap", "badmuts", "swimsuit", "badpak", "zwembroek"],
+      "any": [
+        "swimming goggles",
+        "zwembril",
+        "swim fins",
+        "zwemvliezen",
+        "swim cap",
+        "badmuts",
+        "swimsuit",
+        "badpak",
+        "zwembroek"
+      ],
       "confidence": 0.85
     },
     {
       "id": "team-sports",
       "category": "sport/team-sports",
       "priority": 10,
-      "any": ["football boots", "voetbalschoenen", "shin guards", "scheenbeschermers", "match ball", "basketball", "basketbal", "volleyball", "volleybal"],
-      "none": ["trading card", "sticker", "poster", "jersey frame", "keyring", "sleutelhanger", "phone case", "telefoonhoesje"],
+      "any": [
+        "football boots",
+        "voetbalschoenen",
+        "shin guards",
+        "scheenbeschermers",
+        "match ball",
+        "basketball",
+        "basketbal",
+        "volleyball",
+        "volleybal"
+      ],
+      "none": [
+        "trading card",
+        "sticker",
+        "poster",
+        "jersey frame",
+        "keyring",
+        "sleutelhanger",
+        "phone case",
+        "telefoonhoesje",
+        "panini",
+        "prizm",
+        "topps",
+        "collectible",
+        "memorabilia",
+        "autograph",
+        "card pack",
+        "album",
+        "figurine"
+      ],
       "confidence": 0.84
     },
     {
       "id": "racket-sports",
       "category": "sport/racket-sports",
       "priority": 10,
-      "any": ["tennis racket", "tennisracket", "padel racket", "padelracket", "badminton racket", "squash racket", "grip tape", "gripband"],
-      "none": ["keyring", "sleutelhanger", "miniature", "toy"],
+      "any": [
+        "tennis racket",
+        "tennisracket",
+        "padel racket",
+        "padelracket",
+        "badminton racket",
+        "squash racket",
+        "grip tape",
+        "gripband"
+      ],
+      "none": [
+        "keyring",
+        "sleutelhanger",
+        "miniature",
+        "toy"
+      ],
       "confidence": 0.85
     },
     {
       "id": "winter-sports",
       "category": "sport/winter-sports",
       "priority": 10,
-      "any": ["ski goggles", "skibril", "snowboard", "ski boots", "skischoenen", "skis", "ski jacket", "skijas"],
-      "none": ["wax", "tuning kit", "bag only", "cover"],
+      "any": [
+        "ski goggles",
+        "skibril",
+        "snowboard",
+        "ski boots",
+        "skischoenen",
+        "skis",
+        "ski jacket",
+        "skijas"
+      ],
+      "none": [
+        "wax",
+        "tuning kit",
+        "bag only",
+        "cover"
+      ],
       "confidence": 0.85
     },
-
     {
       "id": "furniture",
       "category": "home/furniture",
       "priority": 10,
-      "any": ["sofa", "bank 3 zits", "dining table", "eettafel", "bookshelf", "boekenkast", "armchair", "fauteuil", "coffee table", "salontafel"],
-      "none": ["cover", "hoes", "protector", "leg", "poot", "cushion only", "assembly kit"],
+      "any": [
+        "sofa",
+        "bank 3 zits",
+        "dining table",
+        "eettafel",
+        "bookshelf",
+        "boekenkast",
+        "armchair",
+        "fauteuil",
+        "coffee table",
+        "salontafel",
+        "round dining table",
+        "coffee table",
+        "tv stand",
+        "sideboard",
+        "dressoir"
+      ],
+      "none": [
+        "cover",
+        "hoes",
+        "protector",
+        "cushion only",
+        "assembly kit",
+        "slipcover",
+        "loose cover",
+        "throw",
+        "replacement leg",
+        "spare leg",
+        "table leg only",
+        "leg set"
+      ],
       "confidence": 0.84
     },
     {
       "id": "kitchen-dining",
       "category": "home/kitchen-dining",
       "priority": 10,
-      "any": ["cookware set", "pannenset", "dinner plate", "dinnerbord", "servies", "cutlery", "bestek", "stand mixer", "keukenmachine", "frying pan", "koekenpan"],
-      "none": ["cleaner", "reiniger", "replacement handle"],
+      "any": [
+        "cookware set",
+        "pannenset",
+        "dinner plate",
+        "dinnerbord",
+        "servies",
+        "cutlery",
+        "bestek",
+        "stand mixer",
+        "keukenmachine",
+        "frying pan",
+        "koekenpan",
+        "mixer tap",
+        "kitchen tap",
+        "monobloc tap",
+        "keukenkraan",
+        "kitchen sink",
+        "spoelbak"
+      ],
+      "none": [
+        "cleaner",
+        "reiniger",
+        "replacement handle"
+      ],
       "confidence": 0.84
     },
     {
       "id": "bedroom",
       "category": "home/bedroom",
       "priority": 10,
-      "any": ["bed frame", "bedframe", "mattress", "matras", "wardrobe", "kledingkast", "bedside table", "nachtkastje"],
-      "none": ["protector", "beschermer", "topper only", "cover only"],
+      "any": [
+        "bed frame",
+        "bedframe",
+        "mattress",
+        "matras",
+        "wardrobe",
+        "kledingkast",
+        "bedside table",
+        "nachtkastje",
+        "matratze",
+        "kaltschaum",
+        "taschenfederkern",
+        "boxspring",
+        "lattenrost"
+      ],
+      "none": [
+        "protector",
+        "beschermer",
+        "topper only",
+        "cover only"
+      ],
       "confidence": 0.84
     },
     {
       "id": "lighting",
       "category": "home/lighting",
       "priority": 10,
-      "any": ["floor lamp", "vloerlamp", "pendant light", "hanglamp", "table lamp", "tafellamp", "smart bulb", "slimme lamp", "ceiling light", "plafondlamp"],
-      "none": ["shade only", "kap only", "bracket", "beugel"],
+      "any": [
+        "floor lamp",
+        "vloerlamp",
+        "pendant light",
+        "hanglamp",
+        "table lamp",
+        "tafellamp",
+        "smart bulb",
+        "slimme lamp",
+        "ceiling light",
+        "plafondlamp",
+        "pendant",
+        "led pendant",
+        "wandlamp",
+        "wall light",
+        "chandelier",
+        "kroonluchter"
+      ],
+      "none": [
+        "shade only",
+        "kap only",
+        "bracket",
+        "beugel"
+      ],
       "confidence": 0.84
     },
     {
       "id": "home-decor",
       "category": "home/home-decor",
       "priority": 9,
-      "any": ["wall art", "wanddecoratie", "canvas print", "cushion", "sierkussen", "rug", "vloerkleed", "mirror", "spiegel"],
-      "none": ["cleaner", "hanging kit", "hook", "haak"],
+      "any": [
+        "wall art",
+        "wanddecoratie",
+        "canvas print",
+        "cushion",
+        "sierkussen",
+        "rug",
+        "vloerkleed",
+        "mirror",
+        "spiegel"
+      ],
+      "none": [
+        "cleaner",
+        "hanging kit",
+        "hook",
+        "haak"
+      ],
       "confidence": 0.8
     },
     {
       "id": "storage",
       "category": "home/storage",
       "priority": 9,
-      "any": ["shelving unit", "stellingkast", "storage box", "opbergbox", "closet organiser", "kledingkast organizer", "storage basket", "opbergmand"],
-      "confidence": 0.8
+      "any": [
+        "shelving unit",
+        "stellingkast",
+        "storage box",
+        "opbergbox",
+        "closet organiser",
+        "kledingkast organizer",
+        "storage basket",
+        "opbergmand",
+        "storage container",
+        "stackable container",
+        "opbergdoos",
+        "storage bin"
+      ],
+      "confidence": 0.8,
+      "none": [
+        "divider",
+        "tab"
+      ]
     },
     {
       "id": "home-textiles",
       "category": "home/home-textiles",
       "priority": 9,
-      "any": ["duvet set", "dekbedovertrek", "curtains", "gordijnen", "towels", "handdoeken", "throw blanket", "plaid"],
+      "any": [
+        "duvet set",
+        "dekbedovertrek",
+        "curtains",
+        "gordijnen",
+        "towels",
+        "handdoeken",
+        "throw blanket",
+        "plaid",
+        "duvet cover",
+        "bedding",
+        "bed linen",
+        "beddengoed",
+        "sofa cover",
+        "recliner cover",
+        "slipcover",
+        "couch cover",
+        "fitted sheet",
+        "hoeslaken"
+      ],
       "confidence": 0.81
     },
     {
       "id": "garden-outdoor",
       "category": "home/garden-outdoor",
       "priority": 9,
-      "any": ["garden furniture", "tuinmeubel", "tuinset", "parasol", "bbq", "barbecue", "planter", "plantenbak"],
-      "none": ["cover", "hoes", "cleaner", "briquettes", "briketten"],
+      "any": [
+        "garden furniture",
+        "tuinmeubel",
+        "tuinset",
+        "parasol",
+        "bbq",
+        "barbecue",
+        "planter",
+        "plantenbak"
+      ],
+      "none": [
+        "cover",
+        "hoes",
+        "cleaner",
+        "briquettes",
+        "briketten"
+      ],
       "confidence": 0.82
     },
-
     {
       "id": "phone-accessory",
       "category": "tech/smartphones",
       "priority": 3,
-      "any": ["phone case", "telefoonhoesje", "screen protector", "screenprotector", "phone charger", "telefoonoplader"],
+      "any": [
+        "phone case",
+        "telefoonhoesje",
+        "screen protector",
+        "screenprotector",
+        "phone charger",
+        "telefoonoplader"
+      ],
       "confidence": 0.72
     },
     {
       "id": "tv-accessory",
       "category": "tech/tv-video",
       "priority": 3,
-      "any": ["tv bracket", "tv beugel", "muurbeugel", "wall mount tv", "remote control", "afstandsbediening"],
+      "any": [
+        "tv bracket",
+        "tv beugel",
+        "muurbeugel",
+        "wall mount tv",
+        "remote control",
+        "afstandsbediening"
+      ],
       "confidence": 0.72
     }
   ],
-
   "tagRules": [
-    { "id": "t-wireless", "tag": "wireless", "any": ["wireless", "draadloos", "cordless"], "none": ["wired only"], "confidence": 0.88 },
-    { "id": "t-anc", "tag": "noise-cancelling", "any": ["noise cancelling", "noise canceling", "anc", "ruisonderdrukking"], "confidence": 0.9 },
-    { "id": "t-waterproof", "tag": "waterproof", "any": ["waterproof", "waterdicht", "ipx7", "ipx8", "ip68"], "confidence": 0.88 },
-    { "id": "t-gps", "tag": "gps", "any": ["gps", "glonass", "galileo"], "confidence": 0.88 },
-    { "id": "t-bluetooth", "tag": "bluetooth", "any": ["bluetooth", "re:\\bbt\\s?5"], "confidence": 0.88 },
-    { "id": "t-smart", "tag": "smart", "any": ["smart", "slimme", "wifi", "alexa", "google assistant"], "confidence": 0.8 },
-    { "id": "t-gaming", "tag": "gaming", "any": ["gaming", "gamer", "esports"], "confidence": 0.84 },
-    { "id": "t-portable", "tag": "portable", "any": ["portable", "draagbaar", "compact", "foldable", "opvouwbaar"], "confidence": 0.78 },
-    { "id": "t-rechargeable", "tag": "rechargeable", "any": ["rechargeable", "oplaadbaar", "usb c charging"], "confidence": 0.8 },
-    { "id": "t-refurb", "tag": "refurbished", "any": ["refurbished", "refurb", "gereviseerd"], "confidence": 0.92 },
-    { "id": "t-used", "tag": "used", "any": ["used", "gebruikt", "pre owned", "tweedehands"], "none": ["new", "nieuw"], "confidence": 0.86 },
-    { "id": "t-new", "tag": "new", "any": ["brand new", "nieuw in doos", "sealed", "new"], "none": ["used", "gebruikt", "refurbished"], "confidence": 0.8 }
+    {
+      "id": "t-wireless",
+      "tag": "wireless",
+      "any": [
+        "wireless",
+        "draadloos",
+        "cordless"
+      ],
+      "none": [
+        "wired only"
+      ],
+      "confidence": 0.88
+    },
+    {
+      "id": "t-anc",
+      "tag": "noise-cancelling",
+      "any": [
+        "noise cancelling",
+        "noise canceling",
+        "anc",
+        "ruisonderdrukking"
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "t-waterproof",
+      "tag": "waterproof",
+      "any": [
+        "waterproof",
+        "waterdicht",
+        "ipx7",
+        "ipx8",
+        "ip68"
+      ],
+      "confidence": 0.88
+    },
+    {
+      "id": "t-gps",
+      "tag": "gps",
+      "any": [
+        "gps",
+        "glonass",
+        "galileo"
+      ],
+      "confidence": 0.88
+    },
+    {
+      "id": "t-bluetooth",
+      "tag": "bluetooth",
+      "any": [
+        "bluetooth",
+        "re:\\bbt\\s?5"
+      ],
+      "confidence": 0.88
+    },
+    {
+      "id": "t-smart",
+      "tag": "smart",
+      "any": [
+        "smart",
+        "slimme",
+        "wifi",
+        "alexa",
+        "google assistant"
+      ],
+      "confidence": 0.8
+    },
+    {
+      "id": "t-gaming",
+      "tag": "gaming",
+      "any": [
+        "gaming",
+        "gamer",
+        "esports"
+      ],
+      "confidence": 0.84
+    },
+    {
+      "id": "t-portable",
+      "tag": "portable",
+      "any": [
+        "portable",
+        "draagbaar",
+        "compact",
+        "foldable",
+        "opvouwbaar"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "t-rechargeable",
+      "tag": "rechargeable",
+      "any": [
+        "rechargeable",
+        "oplaadbaar",
+        "usb c charging"
+      ],
+      "confidence": 0.8
+    },
+    {
+      "id": "t-refurb",
+      "tag": "refurbished",
+      "any": [
+        "refurbished",
+        "refurb",
+        "gereviseerd"
+      ],
+      "confidence": 0.92
+    },
+    {
+      "id": "t-used",
+      "tag": "used",
+      "any": [
+        "used",
+        "gebruikt",
+        "pre owned",
+        "tweedehands"
+      ],
+      "none": [
+        "new",
+        "nieuw"
+      ],
+      "confidence": 0.86
+    },
+    {
+      "id": "t-new",
+      "tag": "new",
+      "any": [
+        "brand new",
+        "nieuw in doos",
+        "sealed",
+        "new"
+      ],
+      "none": [
+        "used",
+        "gebruikt",
+        "refurbished"
+      ],
+      "confidence": 0.8
+    }
   ]
 }

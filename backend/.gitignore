@@ -9,3 +9,6 @@ raw/
 *.log
 .DS_Store
 dist/
+
+# local diagnostic output
+dryrun.txt

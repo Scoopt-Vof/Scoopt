@@ -24,3 +24,27 @@ export const sql = postgres(url, {
 });
 
 export type Sql = typeof sql;
+
+/**
+ * A one-line, safe description of where DATABASE_URL actually points.
+ *
+ * Every script prints this before doing anything. An afternoon was once lost
+ * to a stray DATABASE_URL left in the shell silently beating --env-file:
+ * node's --env-file does NOT override a variable that is already set, so the
+ * scripts connected happily, ran to completion, and reported zero rows — which
+ * is indistinguishable from an empty catalogue. Naming the host removes that
+ * whole class of ambiguity for the price of one line of output.
+ *
+ * The password is never included.
+ */
+export function connectionLabel(): string {
+  const raw = process.env.DATABASE_URL;
+  if (!raw) return '(DATABASE_URL not set)';
+  try {
+    const u = new URL(raw);
+    const db = u.pathname.replace(/^\//, '') || '(default)';
+    return `${decodeURIComponent(u.username)}@${u.hostname}:${u.port || '5432'}/${db}`;
+  } catch {
+    return '(unparseable DATABASE_URL)';
+  }
+}

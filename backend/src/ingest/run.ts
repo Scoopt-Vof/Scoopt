@@ -197,6 +197,19 @@ export async function ingest(
       // rather than against individual products.
       if (classifier) {
         try {
+          // Store the source's OWN category before classifying. This is what
+          // makes a mapping change a local re-run instead of a re-fetch: the
+          // raw signal stays on the product forever.
+          if (sourceKey && raw.sourceCategoryKey) {
+            await sql`
+              insert into product_source_category
+                (product_id, source_key, external_key, external_label, position)
+              values (${product.id}, ${sourceKey}, ${raw.sourceCategoryKey},
+                      ${raw.sourceCategoryLabel ?? null}, 0)
+              on conflict (product_id, source_key, external_key) do update
+                set external_label = excluded.external_label, last_seen = now()`;
+          }
+
           const result = await classifier.classify({
             productId: String(product.id),
             title: raw.title,

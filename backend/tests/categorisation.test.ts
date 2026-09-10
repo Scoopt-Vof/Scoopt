@@ -6,6 +6,7 @@ import {
   validateRules, categoryRules,
 } from '../src/categorisation/index';
 import { getCategoryProducts, getTree, setProductCategory } from '../src/api/catalog-queries';
+import { matchLabelToCategory } from '../src/categorisation/label-match';
 
 /**
  * The categorisation suite.
@@ -49,6 +50,7 @@ beforeEach(async () => {
   await sql`delete from source_category_map`;
   await sql`delete from source_category`;
   await sql`delete from source_category_unmapped`;
+  await sql`delete from product_source_category`;
 });
 
 // ---------------------------------------------------------------------------
@@ -252,6 +254,42 @@ describe('rule engine', () => {
     // ---- deliberate no-match ----
     ['Assorted vintage postcards lot of 40',                  null],
     ['Handmade ceramic figurine, signed',                     null],
+
+    // ---- REAL titles from the first production dry run -------------------
+    // Every one of these was a miss. They are here BEFORE the rules that fix
+    // them, which is the habit that keeps the rule file from becoming a swamp.
+    // False negatives: sellers write "trainers"/"sneakers", not "running shoes".
+    ["adidas Ultraboost 22 Men's Trainers Shoes Indigo Blue GX3061", 'sport/running'],
+    ['Adidas Ultraboost 22 Mens Running Trainers Sneakers GX5573',   'sport/running'],
+    ['ON Running Cloud 6 3MF10070070 [EU 46 UK 11 US 11.5] Shoes',   'sport/running'],
+    ['Osprey Talon 22 S / M Rucksack Fahrradrucksack Tasche Limon',  'sport/hiking-outdoor'],
+    ["Osprey Talon Velocity 20L Men's Multi-Sport Backpack",         'sport/hiking-outdoor'],
+    ['Clear Storage Boxes with Lids Stackable Container Home Office','home/storage'],
+
+    // False POSITIVES — worse than a miss, because they publish something wrong.
+    // A pack of trading cards is not sports equipment.
+    ['2025 PANINI PRIZM WNBA Basketball 4 Pack Caitlin Clark Tin',   null],
+    // A set of sofa COVERS is not a sofa — but it IS a soft furnishing.
+    ['7 Seater Jacquard L Shape Sofa Covers 3-Piece Sectional Sofa', 'home/home-textiles'],
+
+    // ---- second production dry run ---------------------------------------
+    // REGRESSION: 'leg' was in the furniture guard list for replacement parts.
+    // Once matching went plural-tolerant it started matching "Wooden Legs" and
+    // threw out real dining tables. Guard the part, not the word.
+    ['TROMSO 80cm Round Dining Table Scandi Wooden Legs Small Kitchen', 'home/furniture'],
+    // German titles arrive from eBay DE and are as valid an input as Dutch.
+    ['7 Zonen Taschenfederkern Matratze Deluxe 80x200 90x200',       'home/bedroom'],
+    ['7-Zonen Kaltschaum Matratze H2 H3 H4 H5 H6 90x200 120x200',    'home/bedroom'],
+    // The category word is often missing: "Pendant" not "pendant light",
+    // "Mirrorless" not "mirrorless camera", "Mediaplayer" as one word.
+    ['EGLO Hortunas 4 Light LED Pendant Black Steel Smoked Glass',   'home/lighting'],
+    ['[ Excellent ] OLYMPUS PEN Lite E-PL7 White Mirrorless Digital','tech/cameras'],
+    ['Google TV Mediaplayer Streaming Box WLAN Mecool MEON 4K UHD',  'tech/tv-video'],
+    ['Duvet Cover Set Black With Gold Marble Foil Luxury Bedding',   'home/home-textiles'],
+    ['BLANCO Envoy BM1626 Kitchen Mixer Tap Brushed Nickel Steel',   'home/kitchen-dining'],
+    ['Dualit Kitchen Hand Mixer 4 Speed 400W Whisk Beaters Dough',   'tech/home-appliances'],
+    // Still correctly unplaced: this is a cover FOR a parasol, not a parasol.
+    ['Heavy Duty Outdoor Cantilever Parasol Umbrella Cover Beige',   null],
   ];
 
   for (const [title, expected] of SAMPLES) {
@@ -541,5 +579,119 @@ describe('browse read model', () => {
     expect(tree.map((t) => t.slug).sort()).toEqual(['home', 'sport', 'tech']);
     const tech = tree.find((t) => t.slug === 'tech')!;
     expect(tech.children!.length).toBeGreaterThan(4);
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe('mapping a source taxonomy (the part that scales)', () => {
+  it('classifies from a stored source signal without any keyword matching', async () => {
+    const [audio] = await sql<{ id: string }[]>`
+      select id from category where path = 'tech/audio-headphones'`;
+
+    // eBay's own tree: a leaf under a parent, only the PARENT mapped.
+    await sql`insert into source_category (source_key, external_key, parent_key, label) values
+      ('ebay', '15032',  null,    'Portable Audio & Headphones'),
+      ('ebay', '112529', '15032', 'Headphones')`;
+    await sql`insert into source_category_map (source_key, external_key, category_id, confidence)
+              values ('ebay', '15032', ${audio!.id}, 0.900)`;
+
+    // A title no keyword rule could ever place.
+    const id = await insertProduct({ title: 'Nothing CMF Buds 2a XZ-991 Light Grey', n: 70 });
+    await sql`insert into product_source_category
+                (product_id, source_key, external_key, external_label)
+              values (${id}, 'ebay', '112529', 'Headphones')`;
+
+    const signals = await sql<{ source_key: string; external_key: string; label: string | null }[]>`
+      select * from product_source_signals(${id}::bigint)`;
+    expect(signals).toHaveLength(1);
+
+    const classifier = await createClassifier(sql);
+    const result = await classifier.classify({
+      productId: String(id),
+      title: 'Nothing CMF Buds 2a XZ-991 Light Grey',
+      sourceCategories: signals.map((s) => ({
+        sourceKey: s.source_key, externalKey: s.external_key, label: s.label,
+      })),
+    });
+
+    // Placed by the SOURCE, one hop up their tree, not by a keyword.
+    expect(result.stage).toBe('source');
+    expect(result.categoryPath).toBe('tech/audio-headphones');
+    expect(result.confidence).toBeCloseTo(0.85, 2);
+  });
+
+  it('moves every product under a mapping when the mapping is corrected', async () => {
+    const [wrong] = await sql<{ id: string }[]>`select id from category where path = 'tech/gaming'`;
+    const [right] = await sql<{ id: string }[]>`select id from category where path = 'tech/cameras'`;
+
+    await sql`insert into source_category (source_key, external_key, label)
+              values ('ebay', '31388', 'Digital Cameras')`;
+    await sql`insert into source_category_map (source_key, external_key, category_id, confidence)
+              values ('ebay', '31388', ${wrong!.id}, 0.900)`;
+
+    const ids: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      const id = await insertProduct({ title: `Imaging Device ${i}`, n: 80 + i });
+      await sql`insert into product_source_category (product_id, source_key, external_key)
+                values (${id}, 'ebay', '31388')`;
+      ids.push(id);
+    }
+
+    const classify = async () => {
+      const c = await createClassifier(sql);
+      for (const id of ids) {
+        const signals = await sql<{ source_key: string; external_key: string; label: string | null }[]>`
+          select * from product_source_signals(${id}::bigint)`;
+        const r = await c.classify({
+          productId: String(id), title: 'Imaging Device',
+          sourceCategories: signals.map((s) => ({
+            sourceKey: s.source_key, externalKey: s.external_key, label: s.label,
+          })),
+        });
+        await persistClassification(sql, c.taxonomy, r);
+      }
+    };
+
+    await classify();
+    let rows = await sql<{ path: string }[]>`
+      select c.path from product_category pc join category c on c.id = pc.category_id
+       where pc.product_id = any(${ids}) and pc.relation = 'primary'`;
+    expect(rows.every((r) => r.path === 'tech/gaming')).toBe(true);
+
+    // ONE row changes. No re-fetch, no re-ingest.
+    await sql`update source_category_map set category_id = ${right!.id}
+               where source_key = 'ebay' and external_key = '31388'`;
+    await classify();
+
+    rows = await sql<{ path: string }[]>`
+      select c.path from product_category pc join category c on c.id = pc.category_id
+       where pc.product_id = any(${ids}) and pc.relation = 'primary'`;
+    expect(rows).toHaveLength(3);
+    expect(rows.every((r) => r.path === 'tech/cameras')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe('auto-proposing mappings from their category names', () => {
+  it('matches a source category label onto our tree', async () => {
+    const taxonomy = await Taxonomy.load(sql);
+    const cases: [string, string, string][] = [
+      ['Headphones',          'Consumer Electronics > Portable Audio & Headphones', 'tech/audio-headphones'],
+      ['Televisions',         'Consumer Electronics > TV, Video & Home Audio',      'tech/tv-video'],
+      ['Mattresses',          'Home, Furniture & DIY > Furniture > Beds',           'home/bedroom'],
+      ['Running Shoes',       'Sporting Goods > Running',                           'sport/running'],
+    ];
+    for (const [leaf, crumb, expected] of cases) {
+      const m = matchLabelToCategory(taxonomy, leaf, crumb);
+      expect(m?.categoryPath, `${leaf} -> ${m?.categoryPath}`).toBe(expected);
+      // Always below a human-confirmed mapping.
+      expect(m!.confidence).toBeLessThan(0.9);
+    }
+  });
+
+  it('refuses to guess when nothing matches', async () => {
+    const taxonomy = await Taxonomy.load(sql);
+    expect(matchLabelToCategory(taxonomy, 'Collectible Card Games', 'Toys & Games')).toBeNull();
+    expect(matchLabelToCategory(taxonomy, 'Other', 'Everything Else')).toBeNull();
   });
 });

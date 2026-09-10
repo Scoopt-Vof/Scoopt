@@ -114,7 +114,16 @@ function termMatches(term: string, haystack: string): boolean {
   if (!t) return false;
   // Whole-word match. The haystack is already space-normalised, so padding
   // both sides is a correct and much cheaper test than a built regex.
-  return ` ${haystack} `.includes(` ${t} `);
+  //
+  // Plural-tolerant, because listing titles are written by sellers and are
+  // inconsistent about it. "storage box" must match "Storage Boxes", and — far
+  // more importantly — the `none` guard "cover" must match "Sofa Covers", or a
+  // set of sofa COVERS classifies as a sofa. Real misses from the first
+  // production dry run, both directions.
+  const padded = ` ${haystack} `;
+  return padded.includes(` ${t} `)
+      || padded.includes(` ${t}s `)
+      || padded.includes(` ${t}es `);
 }
 
 function matchedTerms(terms: string[], haystack: string): string[] {
