@@ -25,6 +25,7 @@ export interface SubcategoryField {
   type: "number" | "select" | "text";
   placeholder?: string;
   options?: { value: string; label: string }[];
+  hint?: string; // optional help text shown below the field
 }
 
 export interface SubcategoryConfig {
@@ -58,10 +59,10 @@ export const SUBCATEGORY_QUESTIONS: Record<string, SubcategoryConfig> = {
       {
         id: "bedSize", label: "Bed size", type: "select",
         options: [
-          { value: "single", label: "Single" },
-          { value: "double", label: "Double" },
-          { value: "queen", label: "Queen" },
-          { value: "king", label: "King" },
+          { value: "single", label: "Single (90 cm)" },
+          { value: "double", label: "Double (140 cm)" },
+          { value: "queen", label: "Queen (160 cm)" },
+          { value: "king", label: "King (180 cm+)" },
         ],
       },
     ],
@@ -86,6 +87,12 @@ export const SUBCATEGORY_QUESTIONS: Record<string, SubcategoryConfig> = {
     intro: "Tell us how you run, and we'll skip the shoes and watches that aren't right for you.",
     fields: [
       {
+        id: "shoeSize", label: "Shoe size (EU)", type: "select",
+        options: [36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48].map((s) => ({
+          value: String(s), label: String(s),
+        })),
+      },
+      {
         id: "niveau", label: "Your level", type: "select",
         options: [
           { value: "beginner", label: "Beginner" },
@@ -95,8 +102,8 @@ export const SUBCATEGORY_QUESTIONS: Record<string, SubcategoryConfig> = {
       {
         id: "afstand", label: "What are you training for?", type: "select",
         options: [
-          { value: "5-10km", label: "5-10km" },
-          { value: "10-25km", label: "10-25km" },
+          { value: "5-10km", label: "5–10 km" },
+          { value: "10-25km", label: "10–25 km" },
           { value: "marathon", label: "Marathon or beyond" },
           { value: "general", label: "Just staying fit" },
         ],
@@ -116,6 +123,17 @@ export const SUBCATEGORY_QUESTIONS: Record<string, SubcategoryConfig> = {
         ],
       },
       { id: "distance", label: "Typical distance per week (km)", type: "number", placeholder: "e.g. 40" },
+      {
+        id: "clothingSize", label: "Clothing size", type: "select",
+        options: [
+          { value: "XS", label: "XS" },
+          { value: "S", label: "S" },
+          { value: "M", label: "M" },
+          { value: "L", label: "L" },
+          { value: "XL", label: "XL" },
+          { value: "XXL", label: "XXL" },
+        ],
+      },
     ],
   },
   'fitness-gym': {
@@ -138,50 +156,75 @@ export const SUBCATEGORY_QUESTIONS: Record<string, SubcategoryConfig> = {
           { value: "gym", label: "Gym membership" },
         ],
       },
+      {
+        id: "clothingSize", label: "Clothing size", type: "select",
+        options: [
+          { value: "XS", label: "XS" },
+          { value: "S", label: "S" },
+          { value: "M", label: "M" },
+          { value: "L", label: "L" },
+          { value: "XL", label: "XL" },
+          { value: "XXL", label: "XXL" },
+        ],
+      },
     ],
   },
 
   // ---- Technology ----
+  // We ask what the shopper will DO with the device, not what specs they want.
+  // Scoopt translates the use case into the right RAM, storage and display —
+  // the shopper should never have to know those numbers themselves.
   'laptops-computers': {
-    intro: "What you'll actually use it for matters far more than the spec sheet.",
+    intro: "Tell us what you'll actually use it for — we'll translate that into the right RAM, storage and display so you don't have to.",
     fields: [
       {
-        id: "useCase", label: "Main use", type: "select",
+        id: "useCase", label: "What will you mainly use it for?", type: "select",
         options: [
-          { value: "everyday", label: "Everyday browsing" },
-          { value: "work", label: "Work / office" },
+          { value: "everyday", label: "Everyday browsing & email" },
+          { value: "work", label: "Work / office (documents, video calls)" },
+          { value: "school", label: "School or university" },
           { value: "gaming", label: "Gaming" },
-          { value: "creative", label: "Creative / video editing" },
+          { value: "creative", label: "Creative work (video editing, design, music)" },
+        ],
+        hint: "Don't worry about specs — we'll match those to your answer.",
+      },
+      {
+        id: "portability", label: "How often will you carry it?", type: "select",
+        options: [
+          { value: "always", label: "Every day — lightness matters" },
+          { value: "sometimes", label: "Sometimes — balance is fine" },
+          { value: "rarely", label: "Rarely — mostly on a desk" },
         ],
       },
       {
         id: "budget", label: "Budget", type: "select",
         options: [
-          { value: "value", label: "Keep it affordable" },
-          { value: "mid", label: "Mid-range" },
-          { value: "premium", label: "Premium" },
+          { value: "value", label: "Keep it affordable (under €600)" },
+          { value: "mid", label: "Mid-range (€600–€1,200)" },
+          { value: "premium", label: "Premium (€1,200+)" },
         ],
       },
     ],
   },
   smartphones: {
-    intro: "Tell us what matters most and we'll rank accordingly, not by who pays us the most.",
+    intro: "Tell us what matters most and we'll rank accordingly — not by who pays us the most.",
     fields: [
       {
-        id: "priorityFeature", label: "What matters most?", type: "select",
+        id: "priorityFeature", label: "What matters most to you?", type: "select",
         options: [
-          { value: "camera", label: "Camera" },
+          { value: "camera", label: "Camera quality" },
           { value: "battery", label: "Battery life" },
-          { value: "performance", label: "Performance" },
+          { value: "performance", label: "Speed & performance" },
           { value: "price", label: "Price" },
+          { value: "compact", label: "Compact size" },
         ],
       },
       {
         id: "budget", label: "Budget", type: "select",
         options: [
-          { value: "value", label: "Keep it affordable" },
-          { value: "mid", label: "Mid-range" },
-          { value: "premium", label: "Premium" },
+          { value: "value", label: "Keep it affordable (under €300)" },
+          { value: "mid", label: "Mid-range (€300–€700)" },
+          { value: "premium", label: "Premium (€700+)" },
         ],
       },
     ],
