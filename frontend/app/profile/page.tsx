@@ -176,7 +176,7 @@ export default function ProfilePage() {
         Set once, applied automatically every time you browse that section.
       </p>
       <div className="cat-prefs-grid">
-        x(["sport", "home", "tech"] as Category[]).map((cat) => {
+        {(["sport", "home", "tech"] as Category[]).map((cat) => {
           const subcats = CATEGORY_SUBCATEGORIES[cat];
           const isActive = profile.categories.includes(cat);
           return (
