@@ -78,8 +78,12 @@ export async function signUpWithEmail(
     password,
     options: {
       data: name ? { name } : undefined,
+      // Land the confirmation-email click on the dedicated callback page, which
+      // finalises the session and then routes the user on. This URL must be in
+      // Supabase's "Redirect URLs" allow list (Authentication -> URL
+      // Configuration) for every domain, or Supabase ignores it.
       emailRedirectTo:
-        typeof window !== "undefined" ? `${window.location.origin}/account` : undefined,
+        typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined,
     },
   });
   if (error) throw error;
