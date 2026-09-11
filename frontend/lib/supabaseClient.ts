@@ -1,7 +1,7 @@
 // ============================================================================
 //  SUPABASE CLIENT (frontend)
 // ----------------------------------------------------------------------------
-//  Talks to Supabase Auth directly using the public anon key â this is
+//  Talks to Supabase Auth directly using the public anon key — this is
 //  Supabase's normal, secure client pattern: the anon key is safe to expose,
 //  and actual credential checking happens on Supabase's servers, never in
 //  this code. Row Level Security (see backend/db/003_rls.sql) is what keeps
