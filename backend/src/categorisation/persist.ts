@@ -144,13 +144,19 @@ async function applyPublicationGate(
       update product set status = 'draft', updated_at = now()
        where id = ${productId} and status = 'published'`;
 
+    // One open category review per product. Every ingest run re-classifies
+    // every product it sees, so without this guard an unplaceable product
+    // added a fresh duplicate row on each run.
     await sql`
       insert into match_review_queue
         (kind, product_id, retailer_id, retailer_sku, raw_title,
          raw_brand, raw_ean, price_cents, candidate_product_id, confidence, reason)
-      values ('category', ${productId}, null, null, null, null, null, null,
-              ${result.categoryId}, ${Math.round(result.confidence * 100)},
-              ${result.reason ?? 'low_confidence'})`;
+      select 'category', ${productId}, null, null, null, null, null, null,
+             ${result.categoryId}, ${Math.round(result.confidence * 100)},
+             ${result.reason ?? 'low_confidence'}
+       where not exists (
+         select 1 from match_review_queue
+          where kind = 'category' and product_id = ${productId} and resolved = false)`;
   }
 }
 

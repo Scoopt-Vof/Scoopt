@@ -72,8 +72,10 @@ export async function ingest(
   // ---- retailer row (idempotent) -----------------------------------------
   // Delivery rules are optional on the interface — only sources that know them
   // (the Dutch seed retailers) supply them; a raw price API has no idea.
+  // A missing threshold is NULL ("the fee always applies"), never 0 — 0 read
+  // as "free above €0", which made delivery free everywhere (see 012).
   const deliveryFee = (source as { deliveryFeeCents?: number }).deliveryFeeCents ?? 0;
-  const freeAbove = (source as { freeAboveCents?: number }).freeAboveCents ?? 0;
+  const freeAbove = (source as { freeAboveCents?: number | null }).freeAboveCents ?? null;
 
   const [retailer] = await sql<{ id: number }[]>`
     insert into retailer (slug, name, homepage_url, source_kind, affiliate_network,
@@ -108,7 +110,9 @@ export async function ingest(
     productsSeen = offers.length;
 
     // ---- 2. archive raw BEFORE parsing ----------------------------------
-    const archiveDir = join(process.cwd(), 'raw', source.slug);
+    // RAW_ARCHIVE_DIR points this at persistent storage (e.g. a mounted
+    // volume) when ingest runs on a host whose local disk is thrown away.
+    const archiveDir = join(process.env.RAW_ARCHIVE_DIR ?? join(process.cwd(), 'raw'), source.slug);
     await mkdir(archiveDir, { recursive: true });
     const archivePath = join(archiveDir, `${run.id}-${Date.now()}.json`);
     await writeFile(archivePath, rawPayload, 'utf8');
@@ -124,7 +128,13 @@ export async function ingest(
       }
 
       const ean = normaliseEan(raw.ean)!;
+      const shippingCents = raw.shippingCents ?? 0;
+      const currency = (raw.currency ?? 'EUR').toUpperCase();
 
+      // Product, offer and price observation are written in ONE transaction:
+      // a crash mid-row used to be able to leave a product with no offer, or an
+      // offer with no history row.
+      //
       // Tier 1 matching: EAN. Tiers 2 (brand+MPN) and 3 (fuzzy title, gated at
       // confidence 88 with a 75–88 review band) attach here when a second
       // retailer arrives. With one retailer, EAN is sufficient and exact.
@@ -144,49 +154,57 @@ export async function ingest(
       // Status is 'draft', not 'published'. A product is only promoted once
       // the classifier has placed it with enough confidence — an unplaceable
       // product should be invisible to shoppers and visible to us.
-      const [product] = await sql<{ id: number }[]>`
-        insert into product (ean, brand, title, category, image_url, description, status,
-                             contract_id, unit, subcategory, specs)
-        values (${ean}, ${raw.brand}, ${raw.title}, ${raw.category},
-                ${raw.imageUrl ?? null}, ${raw.description ?? null}, 'draft',
-                ${raw.contractId ?? null}, ${raw.unit ?? null}, ${raw.subcategory ?? null},
-                ${sql.json(raw.specs ?? {})})
-        on conflict (ean) do update
-          set image_url   = coalesce(product.image_url, excluded.image_url),
-              description = coalesce(product.description, excluded.description),
-              contract_id = coalesce(product.contract_id, excluded.contract_id),
-              unit        = coalesce(product.unit, excluded.unit),
-              -- Merge rather than replace: a second retailer may know a spec the
-              -- first one didn't, and losing it would silently degrade ranking.
-              specs       = product.specs || excluded.specs,
-              updated_at  = now()
-        returning id
-      `;
+      const productId = await sql.begin(async (tx) => {
+        const [row] = await tx<{ id: number }[]>`
+          insert into product (ean, brand, title, category, image_url, description, status,
+                               contract_id, unit, subcategory, specs)
+          values (${ean}, ${raw.brand}, ${raw.title}, ${raw.category},
+                  ${raw.imageUrl ?? null}, ${raw.description ?? null}, 'draft',
+                  ${raw.contractId ?? null}, ${raw.unit ?? null}, ${raw.subcategory ?? null},
+                  ${tx.json(raw.specs ?? {})})
+          on conflict (ean) do update
+            set image_url   = coalesce(product.image_url, excluded.image_url),
+                description = coalesce(product.description, excluded.description),
+                contract_id = coalesce(product.contract_id, excluded.contract_id),
+                unit        = coalesce(product.unit, excluded.unit),
+                -- Merge rather than replace: a second retailer may know a spec the
+                -- first one didn't, and losing it would silently degrade ranking.
+                specs       = product.specs || excluded.specs,
+                updated_at  = now()
+          returning id
+        `;
 
-      // The offer is mutable current state...
-      await sql`
-        insert into offer (product_id, retailer_id, retailer_sku, price_cents,
-                           currency, shipping_cents, in_stock, product_url)
-        values (${product.id}, ${retailer.id}, ${raw.retailerSku}, ${raw.priceCents},
-                ${raw.currency ?? 'EUR'}, ${raw.shippingCents ?? 0},
-                ${raw.inStock}, ${raw.productUrl})
-        on conflict (product_id, retailer_id) do update
-          set price_cents    = excluded.price_cents,
-              shipping_cents = excluded.shipping_cents,
-              in_stock       = excluded.in_stock,
-              product_url    = excluded.product_url,
-              retailer_sku   = excluded.retailer_sku,
-              last_seen_at   = now()
-      `;
+        // The offer is mutable current state...
+        await tx`
+          insert into offer (product_id, retailer_id, retailer_sku, price_cents,
+                             currency, shipping_cents, in_stock, product_url)
+          values (${row.id}, ${retailer.id}, ${raw.retailerSku}, ${raw.priceCents},
+                  ${currency}, ${shippingCents}, ${raw.inStock}, ${raw.productUrl})
+          on conflict (product_id, retailer_id) do update
+            set price_cents    = excluded.price_cents,
+                currency       = excluded.currency,
+                shipping_cents = excluded.shipping_cents,
+                in_stock       = excluded.in_stock,
+                product_url    = excluded.product_url,
+                retailer_sku   = excluded.retailer_sku,
+                last_seen_at   = now()
+        `;
+
+        // ...price_observation is the permanent record. Every run, every product,
+        // unconditionally. Never conditional on "did the price change" — a flat
+        // line is information, and gaps make a chart lie. Shipping and currency
+        // are recorded (013) so history compares on the same delivered basis as
+        // the current price.
+        await tx`
+          insert into price_observation (product_id, retailer_id, price_cents, shipping_cents,
+                                         currency, in_stock, ingest_run_id)
+          values (${row.id}, ${retailer.id}, ${raw.priceCents}, ${shippingCents},
+                  ${currency}, ${raw.inStock}, ${run.id})
+        `;
+        return row.id;
+      });
+      const product = { id: productId };
       offersUpserted++;
-
-      // ...price_observation is the permanent record. Every run, every product,
-      // unconditionally. Never conditional on "did the price change" — a flat
-      // line is information, and gaps make a chart lie.
-      await sql`
-        insert into price_observation (product_id, retailer_id, price_cents, in_stock, ingest_run_id)
-        values (${product.id}, ${retailer.id}, ${raw.priceCents}, ${raw.inStock}, ${run.id})
-      `;
       observationsWritten++;
 
       // ---- 5. classify --------------------------------------------------
@@ -278,12 +296,22 @@ function validate(raw: RawOffer): string | null {
   return null;
 }
 
+/**
+ * Files a rejected feed row for a person to look at — once. The same bad row
+ * comes back on every run, and a queue that grows by one duplicate per run is
+ * a queue nobody reads. An open entry for the same retailer, SKU and reason is
+ * left alone; a resolved one does not block a new report.
+ */
 async function queueForReview(retailerId: number, raw: RawOffer, reason: string) {
   await sql`
     insert into match_review_queue
       (retailer_id, retailer_sku, raw_title, raw_brand, raw_ean, price_cents, confidence, reason)
-    values (${retailerId}, ${raw.retailerSku}, ${raw.title ?? ''}, ${raw.brand ?? null},
-            ${raw.ean ?? null}, ${raw.priceCents ?? null}, 0, ${reason})
+    select ${retailerId}, ${raw.retailerSku}, ${raw.title ?? ''}, ${raw.brand ?? null},
+           ${raw.ean ?? null}, ${raw.priceCents ?? null}, 0, ${reason}
+     where not exists (
+       select 1 from match_review_queue
+        where retailer_id = ${retailerId} and retailer_sku = ${raw.retailerSku}
+          and reason = ${reason} and resolved = false)
   `;
 }
 
@@ -324,7 +352,7 @@ if (isMain) {
         );
       } catch (e) {
         // One bad source must not abort the rest — a rate limit at eBay should
-        // not cost you the Kroger run.
+        // not cost you the next source's run.
         failed++;
         console.error(`✗ ${source.slug} failed: ${String(e).split('\n')[0]}\n`);
       }

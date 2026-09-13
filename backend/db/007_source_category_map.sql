@@ -1,4 +1,4 @@
--- Scoopt back end — schema v7
+-- Scoopt back end — schema v7b (runs after 007_category_tree.sql; filename order)
 --
 -- Two related changes, both about WHERE a product's category comes from.
 --

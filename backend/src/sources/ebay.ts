@@ -1,5 +1,6 @@
 import { fetchJson, requireEnv } from '../lib/http';
 import { getAccessToken } from '../lib/oauth';
+import { normaliseEan } from '../lib/ean';
 import type { RetailerSource, FetchResult, RawOffer } from './types';
 
 /**
@@ -26,11 +27,21 @@ import type { RetailerSource, FetchResult, RawOffer } from './types';
  *      EAN → item. The flow is therefore keyword → items → getItem → EAN,
  *      not EAN → item.
  *
- * WHY THIS GIVES YOU REAL COMPARISON ROWS: instantiate it three times with
- * EBAY_NL, EBAY_DE and EBAY_GB. Same branded products, three marketplaces,
- * three different prices against ONE EAN. That is the only way in this whole
- * source set to demonstrate an actual multi-offer comparison — see the note in
- * README-LIVE-APIS.md about the overlap problem.
+ * WHY THIS GIVES YOU REAL COMPARISON ROWS: instantiate it once per euro
+ * marketplace (EBAY_NL, EBAY_DE). Same branded products, different prices
+ * against ONE EAN. EBAY_GB was dropped from the registry: it prices in GBP,
+ * which ingest refuses, so every eBay UK call spent quota for nothing.
+ *
+ * WHAT ONE OFFER MEANS. The database holds one offer per product per retailer,
+ * and each marketplace is one retailer. Several sellers often list the same
+ * EAN; previously each overwrote the last, so the stored price was whichever
+ * listing happened to be processed last. fetch() now keeps the CHEAPEST
+ * delivered NEW listing per EAN, and only NEW-condition listings are fetched,
+ * so a used item is never compared against a new one.
+ *
+ * AFFILIATE LINKS. Set EPN_CAMPAIGN_ID (eBay Partner Network) and the Browse
+ * API returns itemAffiliateWebUrl, which is stored instead of the plain link so
+ * click-outs can earn commission. Without it, plain links are stored as before.
  *
  * ---------------------------------------------------------------------------
  * CATEGORY + SUBCATEGORY ASSIGNMENT — changed from the original version.
@@ -83,6 +94,9 @@ export interface EbayQuery {
 }
 
 interface ItemSummary { itemId: string; title: string; epid?: string }
+
+/** eBay's condition id for brand-new items. */
+const CONDITION_NEW = '1000';
 interface EbayItem {
   itemId: string;
   title: string;
@@ -96,9 +110,13 @@ interface EbayItem {
   categoryId?: string;
   categoryPath?: string;
   itemWebUrl: string;
+  /** Present only when the request carries an affiliate campaign id. */
+  itemAffiliateWebUrl?: string;
   image?: { imageUrl?: string };
   shortDescription?: string;
   condition?: string;
+  /** Language-independent condition code; '1000' is New. */
+  conditionId?: string;
   price?: { value?: string; currency?: string };
   shippingOptions?: Array<{ shippingCost?: { value?: string; currency?: string } }>;
   estimatedAvailabilities?: Array<{ estimatedAvailabilityStatus?: string }>;
@@ -137,19 +155,27 @@ export class EbaySource implements RetailerSource {
 
   async fetch(): Promise<FetchResult> {
     const token = await this.token();
-    const headers = {
+    const headers: Record<string, string> = {
       authorization: `Bearer ${token}`,
       'X-EBAY-C-MARKETPLACE-ID': this.marketplace,
     };
+    const campaignId = process.env.EPN_CAMPAIGN_ID;
+    if (campaignId) {
+      headers['X-EBAY-C-ENDUSERCTX'] = `affiliateCampaignId=${campaignId}`;
+    }
 
     const offers: RawOffer[] = [];
+    // Cheapest NEW listing per EAN, delivered price. Rows with no GTIN are kept
+    // separately: they cannot collide on an EAN and go to the review queue.
+    const bestByEan = new Map<string, RawOffer>();
     const rawParts: unknown[] = [];
     const seenItemIds = new Set<string>();
 
     for (const q of this.queries) {
       const url =
         `${BROWSE}/item_summary/search?q=${encodeURIComponent(q.term)}` +
-        `&limit=${this.maxItemsPerQuery}&filter=buyingOptions:{FIXED_PRICE}`;
+        `&limit=${this.maxItemsPerQuery}` +
+        `&filter=${encodeURIComponent(`buyingOptions:{FIXED_PRICE},conditionIds:{${CONDITION_NEW}}`)}`;
 
       const { data, raw } = await fetchJson<{ itemSummaries?: ItemSummary[] }>(url, {
         headers, rateKey: 'ebay', rateLimit: RATE,
@@ -176,11 +202,23 @@ export class EbaySource implements RetailerSource {
         rawParts.push({ itemId: s.itemId, detail: JSON.parse(detail.raw) });
 
         const offer = toRawOffer(detail.data, q);
+        if (!offer) continue;
+
         // No GTIN means it cannot join the EAN graph. The ingest job will file
         // it in match_review_queue rather than silently dropping it.
-        if (offer) offers.push(offer);
+        if (!offer.ean) {
+          offers.push(offer);
+          continue;
+        }
+        // Key on the normalised EAN so a UPC-A and its EAN-13 spelling collide.
+        const key = normaliseEan(offer.ean) ?? offer.ean;
+        const current = bestByEan.get(key);
+        if (!current || deliveredCents(offer) < deliveredCents(current)) {
+          bestByEan.set(key, offer);
+        }
       }
     }
+    offers.push(...bestByEan.values());
 
     return {
       offers,
@@ -192,9 +230,15 @@ export class EbaySource implements RetailerSource {
   }
 }
 
+const deliveredCents = (o: RawOffer): number => o.priceCents + (o.shippingCents ?? 0);
+
 function toRawOffer(item: EbayItem, q: EbayQuery): RawOffer | null {
   const priceValue = Number(item.price?.value);
   if (!Number.isFinite(priceValue) || priceValue <= 0) return null;
+  // The search is already filtered to new items; this is the second lock in
+  // case a getItem response disagrees (conditionId is language-independent,
+  // unlike the localised `condition` text).
+  if (item.conditionId && item.conditionId !== CONDITION_NEW) return null;
 
   const shippingValue = Number(item.shippingOptions?.[0]?.shippingCost?.value ?? 0);
   const gtin = item.gtin ?? item.product?.gtins?.[0] ?? null;
@@ -211,7 +255,7 @@ function toRawOffer(item: EbayItem, q: EbayQuery): RawOffer | null {
     shippingCents: Number.isFinite(shippingValue) ? Math.round(shippingValue * 100) : 0,
     currency: item.price?.currency ?? 'EUR',
     inStock: availability ? availability !== 'OUT_OF_STOCK' : true,
-    productUrl: item.itemWebUrl,
+    productUrl: item.itemAffiliateWebUrl ?? item.itemWebUrl,
     imageUrl: item.image?.imageUrl ?? null,
     description: item.shortDescription ?? null,
     // The category SIGNAL, not a category decision. q.category/q.subcategory

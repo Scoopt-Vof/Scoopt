@@ -73,25 +73,30 @@ Open the VS Code terminal (**Terminal → New Terminal**) and run these in order
 
 ```bash
 npm install        # install dependencies (~30 seconds)
-npm run db:migrate # create the tables in Supabase
-npm run ingest     # load the catalogue — should print "15 seen, 15 offers"
-npm test           # needs TEST_DATABASE_URL - see "Running the tests"
-npm run dev        # start the API on http://localhost:3001
+npm run db:migrate # create/upgrade the tables in Supabase (only new files run)
+npm run ingest -- ebay-nl ebay-de   # load real prices (needs eBay keys, see README-LIVE-APIS.md)
+npm run serve      # start the API on http://localhost:3002
 ```
 
 With the server running, open a **second** terminal and try:
 
 ```bash
-curl "http://localhost:3001/api/search?q=Kalenji"
-curl "http://localhost:3001/api/product/1"
-curl "http://localhost:3001/api/price-history/1"
+curl "http://localhost:3002/health"
+curl "http://localhost:3002/api/search?q=running%20shoes"
+curl "http://localhost:3002/api/product/1"
+curl "http://localhost:3002/api/price-history/1"
 ```
 
-Or just open <http://localhost:3001/api/product/1> in your browser.
+Or use `api.http` with the VS Code REST Client extension.
 
-Run `npm run ingest` a few more times and the price history builds up. Set
-`SIMULATE_PRICE_DRIFT=1` in `.env` first if you want the prices to actually move
-so the chart has something to show.
+Price history builds up every time `npm run ingest` runs. Offers an ingest run
+has not refreshed within `OFFER_MAX_AGE_HOURS` (default 48) are hidden, so run
+ingest at least that often.
+
+`npm run db:migrate -- --list` shows which migration files are applied and
+which are pending. Applied files are recorded in `schema_migrations`; the first
+run against an existing database re-applies every file once (they were all
+written to be re-runnable) and records them.
 
 ### Running the tests
 
@@ -100,13 +105,17 @@ database you care about. It reads `TEST_DATABASE_URL` — not `DATABASE_URL` —
 and refuses to start if that is missing, or identical to the real one.
 
 Make a throwaway database (a second free Supabase project called `scoopt-test`
-is the quickest route) and add it to `.env`:
+is the quickest route), run the migrations against it, and add it to `.env`:
 
 ```
 TEST_DATABASE_URL=postgresql://postgres.xxxx:PASSWORD@aws-0-eu-central-1.pooler.supabase.com:5432/postgres
 ```
 
-Then `npm test` behaves as it always did, against that database instead.
+```bash
+npm run test:env         # runs the suite with TEST_DATABASE_URL read from .env
+npm run typecheck
+npm run contract:check   # the backend's contract copy still matches the front end's
+```
 
 ---
 
@@ -120,68 +129,82 @@ Supabase dashboard → **Table Editor**. You'll see `product`, `offer`,
 ## What's in here
 
 ```
-db/001_schema.sql          the database. money as integer cents, price history append-only
-db/002_contract_fields.sql the extra fields the front-end contract needs
-db/003_rls.sql             row level security, so Supabase's public API exposes nothing
-db/006_subcategory_english_ids.sql  one-time fix: real subcategory ids instead of search phrases
-src/ingest/discover-icecat.ts       creates NEW products straight from Icecat, no price yet
-src/ingest/list-icecat-categories.ts   finds real Icecat category IDs for discover-icecat.ts
-src/contract/types.ts      the shapes the API returns  ← replaced by Josh's contract later
-src/contract/schemas.ts    Zod mirrors + the invariants written down as code
+db/001–014_*.sql           the database, applied in filename order, each once
+  001_schema.sql           money as integer cents, price history append-only
+  003_rls.sql, 011_rls_category_tag.sql   row level security: Supabase's public API exposes nothing
+  012–014                  delivery thresholds, shipping on history, category display metadata
+scripts/migrate.mjs        applies pending migrations and records them in schema_migrations
+scripts/contract-check.mjs fails if the backend's contract copy drifts from the front end's
+src/contract-server.ts     THE API server (npm run serve / npm start)
+src/api/contract-handlers.ts  Request → Response handlers for the contract endpoints
+src/api/contract-queries.ts   rows → contract shapes; the one cents → euros conversion
+src/api/catalog-*.ts       category tree, paged category products, facets, taxonomy
+src/api/cors.ts, respond.ts   CORS policy, JSON/error helpers and input validation
+src/lib/offers.ts          the one definition of a live offer (EUR, active retailer, fresh)
+src/contract/frontend-types.ts   verbatim copy of frontend/contract/types.ts
+src/contract/schemas.ts    Zod mirrors of that contract + the invariants written down as code
 src/sources/types.ts       the RetailerSource interface  ← THE SWAP POINT
-src/sources/decathlon.ts   the Decathlon adapter  ← the one file a real feed replaces
-src/ingest/run.ts          acquire → archive → normalise → match → store
-src/api/queries.ts         all the SQL
-src/api/handlers.ts        Request → Response functions  ← these drop into Next.js as-is
-src/api/contract-*.ts      the same endpoints in Josh's exact shapes (npm run serve)
-src/contract-server.ts     dev server for those contract shapes
-src/server.ts              a tiny dev server so you can curl it without Next.js
+src/sources/ebay.ts        the eBay adapter (NL and DE marketplaces)
+src/ingest/run.ts          acquire → archive → normalise → match → store → classify
+src/ingest/discover-icecat.ts       creates NEW products straight from Icecat, no price yet
+src/categorisation/        the classifier: source category maps, rules, (disabled) model fallback
 tests/                     unit, integration and data-quality tests
 tests/setup.ts             refuses to run the suite against your real database
-raw/                       archived payloads, one per ingest run (gitignored)
+raw/                       archived payloads, one per ingest run (gitignored; RAW_ARCHIVE_DIR overrides)
 tests/fixtures/            test-only catalogue: invented brands, never shipped
 ```
 
 ---
 
-## Wiring this into Josh's Next.js app
+## How the front end uses this
 
-Nothing needs rewriting. Copy `src/` and `db/` into the repo, delete
-`src/server.ts` and `src/contract/types.ts`, point the contract imports at
-`contract/types.ts`, and each route file becomes two lines:
+The front end's Next.js `/api/*` routes proxy to this server via
+`frontend/lib/backend.ts` (`BACKEND_URL`). There is no fake-data fallback: if the
+back end is unreachable the routes return 502/503 and the pages render empty —
+which is the correct failure mode for a price-comparison site.
 
-```ts
-// app/api/product/[id]/route.ts
-import { productHandler } from '@/src/api/handlers';
-
-export const GET = (req: Request, ctx: { params: { id: string } }) =>
-  productHandler(req, ctx.params.id);
-```
-
-```ts
-// app/api/search/route.ts
-import { searchHandler } from '@/src/api/handlers';
-export const GET = searchHandler;
-```
-
-There is no fake-data fallback to flip between any more. `lib/fakeData.ts` has
-been deleted, and the Next.js routes proxy to this backend via `lib/backend.ts`.
-If the backend is unreachable the routes return 502/503 and the pages render
-empty — which is the correct failure mode for a price-comparison site.
+Browsers only call this server directly in local development; allow that origin
+with `CORS_ORIGINS` (default `http://localhost:3000`).
 
 ---
 
-## What this trial run proves, and what it doesn't
+## Deploying (Railway)
 
-**Proves:** the schema holds real data; ingestion is idempotent; price history
-accumulates and cannot be silently rewritten; junk EANs are caught rather than
-matched; the API returns contract-valid shapes; the data-quality checks fire.
+The back end runs on Railway as two services built from this repo, both with
+**Root Directory** set to `/backend`:
+
+| Service | Config file (Settings → Config-as-code) | What it does |
+|---|---|---|
+| API | `/backend/railway.json` | `npm start` → `src/contract-server.ts` on Railway's `PORT`; health check `/health` |
+| Ingest (cron) | `/backend/railway.ingest.json` | `npm run ingest:railway` (eBay NL + DE) daily at 03:00 UTC, then exits |
+
+Environment variables are set per service in Railway (there is no `.env` file on
+Railway). See `.env.example` for the full list. At minimum:
+
+- **Both services:** `DATABASE_URL`, `HTTP_USER_AGENT`
+- **API:** optionally `HEALTH_TOKEN`, `CORS_ORIGINS`, `OFFER_MAX_AGE_HOURS`
+- **Ingest:** `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`, optionally `EPN_CAMPAIGN_ID`
+
+Order when a release includes migrations: run `npm run db:migrate` against the
+live database first, then deploy. Offers not refreshed within
+`OFFER_MAX_AGE_HOURS` (default 48) are hidden, so the ingest cron must keep
+running for prices to stay visible.
+
+The front end (Vercel) reaches the API through `BACKEND_URL`, set to the API
+service's public Railway URL.
+
+---
+
+## What this proves, and what it doesn't
+
+**Proves:** the schema holds real data; ingestion is idempotent and atomic per
+product; price history accumulates and cannot be silently rewritten; junk EANs
+are caught rather than matched; the API returns contract-valid shapes; the
+data-quality checks fire.
 
 **Doesn't prove:** that any particular retailer will give you data. That is a
-commercial question, not a technical one, and it stays the long pole. Nothing in
-this codebase gets you closer to it except that it's ready when approval lands.
+commercial question, not a technical one, and it stays the long pole.
 
-**Not built yet:** auth, and matching tiers 2 and 3 — brand+MPN and fuzzy title
-only start mattering once a second real retailer is in play. `/api/category`,
-`/api/basket/*` and `/api/personalise` now exist in the contract layer
-(`src/api/contract-handlers.ts`), served by `npm run serve`.
+**Not built yet:** user authentication on the API (so admin routes stay
+unmounted and `/api/track` drops events), matching tiers 2 and 3 (brand+MPN and
+fuzzy title), currency conversion, and an ingest scheduler.

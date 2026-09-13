@@ -1,8 +1,10 @@
 import { sql } from '../lib/db';
+import { LIVE_OFFER, LIVE_OFFER_ORDER } from '../lib/offers';
 import type {
   Product, Offer, ProductWithOffers, CategoryPage, Category,
   BasketRequest, BasketResult, StoreBasketTotal, PriceHistory, PricePoint,
   DeliveryRule, PersonalisedProduct, ShopperProfile, ObservedSignals,
+  BudgetBand, Priority,
 } from '../contract/frontend-types';
 
 /**
@@ -30,7 +32,18 @@ import type {
  */
 
 /** The single conversion point. Integer cents in, euros out, correctly rounded. */
-const toEuros = (cents: number): number => Math.round(cents) / 100;
+export const toEuros = (cents: number): number => Math.round(cents) / 100;
+
+/**
+ * The ONE public product id rule, used by every endpoint (this file and
+ * catalog-queries.ts): the contract slug when a product has one, otherwise the
+ * numeric id. Endpoints that disagreed on this made the same product appear
+ * twice in a basket.
+ */
+export const publicProductId = (contractId: string | null, id: string | number): string =>
+  contractId ?? String(id);
+
+const CATEGORIES: readonly Category[] = ['home', 'sport', 'tech'];
 
 interface ProductRow {
   id: string; contract_id: string | null; ean: string; brand: string;
@@ -40,17 +53,15 @@ interface ProductRow {
 
 function toProduct(r: ProductRow): Product {
   return {
-    // Prefer the contract slug; fall back to the numeric id so a product
-    // ingested from a real feed before matching is still addressable.
-    id: r.contract_id ?? String(r.id),
+    id: publicProductId(r.contract_id, r.id),
     ean: r.ean,
     brand: r.brand,
     name: r.title,
     unit: r.unit ?? '',
-    // The contract allows exactly home | sport | tech. Anything else in the
-    // database is a data error, not a new category — default rather than emit
-    // a value the front end's Record<Category, …> lookups cannot handle.
-    category: (['home', 'sport', 'tech'].includes(r.category) ? r.category : 'sport') as Category,
+    // VISIBLE_PRODUCT below already excludes any category outside the
+    // contract's home | sport | tech, so this cast is safe. It used to rewrite
+    // unknown values to 'sport', which quietly filled Sport with junk.
+    category: r.category as Category,
     subcategory: r.subcategory ?? r.category,
     image: r.image_url ?? '',
     specs: r.specs ?? {},
@@ -61,6 +72,9 @@ const PRODUCT_COLS = sql`
   p.id, p.contract_id, p.ean, p.brand, p.title, p.unit,
   p.category, p.subcategory, p.image_url, p.specs
 `;
+
+/** Published, and in a category the contract can represent. */
+const VISIBLE_PRODUCT = sql`p.status = 'published' and p.category in ('home', 'sport', 'tech')`;
 
 /** Accepts either the contract slug or the numeric id. */
 const byId = (id: string) =>
@@ -74,14 +88,18 @@ interface OfferRow {
 
 function toOffer(r: OfferRow): Offer {
   return {
-    productId: r.contract_id ?? String(r.product_id),
+    productId: publicProductId(r.contract_id, r.product_id),
     store: r.slug,
     // Shipping is folded into the price here because the contract's Offer has
     // no shipping field. The database keeps them separate — which is the right
     // call, and the reason the DB ranks on price+shipping while the contract
     // can only rank on one number.
+    //
+    // CONTRACT NOTE: because shipping is already inside `price`, the basket
+    // planner must not add a per-offer shipping cost again. Delivery rules
+    // (getDeliveryRules) are the retailer's order-level fee, a separate thing.
     price: toEuros(r.price_cents + r.shipping_cents),
-    // Safe because ingest rejects non-euro offers and offersFor() filters them
+    // Safe because ingest rejects non-euro offers and LIVE_OFFER filters them
     // out: the contract's Offer.currency is the literal "EUR".
     currency: 'EUR',
     inStock: r.in_stock,
@@ -90,20 +108,21 @@ function toOffer(r: OfferRow): Offer {
   };
 }
 
+/**
+ * Live offers per product, in stock first and cheapest first within that, so
+ * offers[0] is always the best offer a shopper can actually buy.
+ */
 async function offersFor(productDbIds: string[]): Promise<Map<string, Offer[]>> {
   if (productDbIds.length === 0) return new Map();
   const rows = await sql<OfferRow[]>`
     select p.contract_id, o.product_id, r.slug, o.price_cents, o.shipping_cents,
            o.in_stock, o.product_url, o.last_seen_at
       from offer o
-      join retailer r on r.id = o.retailer_id and r.is_active
+      join retailer r on r.id = o.retailer_id
       join product  p on p.id = o.product_id
      where o.product_id = any(${productDbIds}::bigint[])
-      -- The contract's Offer.currency is the literal "EUR", and ranking adds
-      -- raw cents with no conversion. Ingest refuses non-euro rows; this is the
-      -- second lock, so a row ingested before that check cannot reach the API.
-      and o.currency = 'EUR'
-     order by (o.price_cents + o.shipping_cents) asc, r.slug asc
+       and ${LIVE_OFFER}
+     order by ${LIVE_OFFER_ORDER}
   `;
   const map = new Map<string, Offer[]>();
   for (const row of rows) {
@@ -120,100 +139,104 @@ async function offersFor(productDbIds: string[]): Promise<Map<string, Offer[]>> 
 export async function getProduct(id: string): Promise<ProductWithOffers | null> {
   const [row] = await sql<ProductRow[]>`
     select ${PRODUCT_COLS} from product p
-     where ${byId(id)} and p.status = 'published' limit 1`;
+     where ${byId(id)} and ${VISIBLE_PRODUCT} limit 1`;
   if (!row) return null;
   const offers = (await offersFor([row.id])).get(String(row.id)) ?? [];
   return { product: toProduct(row), offers };
 }
 
 // ---------------------------------------------------------------------------
-// GET /api/search?q=
+// GET /api/search?q=&limit=&offset=
 // ---------------------------------------------------------------------------
-export async function searchProducts(q: string): Promise<Product[]> {
+export const SEARCH_DEFAULT_LIMIT = 100;
+export const SEARCH_EMPTY_DEFAULT_LIMIT = 200;
+export const SEARCH_MAX_LIMIT = 200;
+const SEARCH_MAX_WORDS = 8;
+
+/** ILIKE treats % and _ as wildcards; a shopper typing them means the literal. */
+const escapeLike = (s: string): string => s.replace(/[\\%_]/g, (c) => '\\' + c);
+
+export async function searchProducts(
+  q: string,
+  opts: { limit?: number; offset?: number } = {}
+): Promise<Product[]> {
   const term = q.trim();
-  // The contract's behaviour: an empty query returns everything.
-  const rows = term
-    ? await sql<ProductRow[]>`
-        select ${PRODUCT_COLS} from product p
-         where p.status = 'published'
-           and (p.title ilike ${'%' + term + '%'}
-             or p.brand ilike ${'%' + term + '%'}
-             or p.subcategory ilike ${'%' + term + '%'}
-             or p.unit ilike ${'%' + term + '%'})
-         order by similarity(p.title, ${term}) desc, p.title asc
-         limit 100`
-    : await sql<ProductRow[]>`
-        select ${PRODUCT_COLS} from product p
-         where p.status = 'published' order by p.id asc limit 200`;
+  const offset = Math.max(0, Math.floor(opts.offset ?? 0));
+
+  // The contract's behaviour: an empty query lists the catalogue. It is paged
+  // (limit/offset), not unbounded — callers that want "everything" must page.
+  if (!term) {
+    const limit = clampLimit(opts.limit, SEARCH_EMPTY_DEFAULT_LIMIT);
+    const rows = await sql<ProductRow[]>`
+      select ${PRODUCT_COLS} from product p
+       where ${VISIBLE_PRODUCT}
+       order by p.id asc limit ${limit} offset ${offset}`;
+    return rows.map(toProduct);
+  }
+
+  // Every word must match somewhere (title, brand, subcategory or unit), in
+  // any order — so "nike shoe" finds "Nike Pegasus running shoe", which a
+  // single substring match never did.
+  const words = term.split(/\s+/).filter(Boolean).slice(0, SEARCH_MAX_WORDS);
+  const wordMatches = words.map((w) => {
+    const pattern = '%' + escapeLike(w) + '%';
+    return sql`(p.title ilike ${pattern} or p.brand ilike ${pattern}
+             or p.subcategory ilike ${pattern} or p.unit ilike ${pattern})`;
+  });
+  const allWords = wordMatches.reduce((acc, m) => sql`${acc} and ${m}`);
+
+  const limit = clampLimit(opts.limit, SEARCH_DEFAULT_LIMIT);
+  const rows = await sql<ProductRow[]>`
+    select ${PRODUCT_COLS} from product p
+     where ${VISIBLE_PRODUCT} and ${allWords}
+     order by similarity(p.title, ${term}) desc, p.title asc, p.id asc
+     limit ${limit} offset ${offset}`;
   return rows.map(toProduct);
+}
+
+function clampLimit(requested: number | undefined, fallback: number): number {
+  if (requested === undefined || !Number.isFinite(requested)) return fallback;
+  return Math.min(Math.max(Math.floor(requested), 1), SEARCH_MAX_LIMIT);
 }
 
 // ---------------------------------------------------------------------------
 // GET /api/category/:cat
 // ---------------------------------------------------------------------------
-// English ids throughout, matching the tags in ../sources/ebay.ts DEFAULT_QUERIES
-// and the front end's lib/subcategoryQuestions.ts. Every id ebay.ts can tag an
-// offer with has an entry here, so a subcategory that just received its first
-// product still gets a real name/icon/essentials list, not the raw id as a
-// fallback.
-const SUBCATEGORY_META: Record<string, { name: string; icon: string; essentials: string[] }> = {
-  // ---- Sport ----
-  running:        { name: 'Running',          icon: 'shoe',      essentials: ['Running shoes', 'GPS watch', 'Running socks', 'Heart rate monitor'] },
-  cycling:        { name: 'Cycling',          icon: 'bike',      essentials: ['Bike', 'Helmet', 'Cycling shorts', 'Lights'] },
-  'hiking-outdoor': { name: 'Hiking & Outdoor', icon: 'mountain', essentials: ['Hiking boots', 'Backpack', 'Rain shell', 'Trekking poles'] },
-  'fitness-gym':  { name: 'Fitness & Gym',    icon: 'dumbbell',  essentials: ['Training shoes', 'Dumbbells', 'Fitness mat', 'Resistance bands'] },
-  swimming:       { name: 'Swimming',         icon: 'waves',     essentials: ['Swimsuit', 'Goggles', 'Swim cap', 'Fins'] },
-  'team-sports':  { name: 'Team Sports',      icon: 'ball',      essentials: ['Boots', 'Shin guards', 'Match ball', 'Kit bag'] },
-  'racket-sports': { name: 'Racket Sports',   icon: 'racket',    essentials: ['Racket', 'Balls', 'Court shoes', 'Grip tape'] },
-  'winter-sports': { name: 'Winter Sports',   icon: 'snowflake', essentials: ['Skis or board', 'Boots', 'Goggles', 'Thermal layers'] },
-
-  // ---- Home & Furniture ----
-  furniture:        { name: 'Furniture',              icon: 'sofa',    essentials: ['Sofa', 'Dining table', 'Chairs', 'Bookshelf'] },
-  'kitchen-dining': { name: 'Kitchen & Dining',        icon: 'plate',   essentials: ['Cookware set', 'Dinner plates', 'Cutlery', 'Stand mixer'] },
-  bedroom:          { name: 'Bedroom',                 icon: 'bed',     essentials: ['Bed frame', 'Mattress', 'Wardrobe', 'Bedside table'] },
-  lighting:         { name: 'Lighting',                icon: 'lamp',    essentials: ['Floor lamp', 'Pendant light', 'Table lamp', 'Smart bulbs'] },
-  'home-decor':     { name: 'Home Decor',              icon: 'frame',   essentials: ['Wall art', 'Cushions', 'Rugs', 'Mirrors'] },
-  storage:          { name: 'Storage & Organisation',  icon: 'box',     essentials: ['Shelving unit', 'Storage boxes', 'Closet organiser', 'Baskets'] },
-  'home-textiles':  { name: 'Home Textiles',           icon: 'blanket', essentials: ['Duvet set', 'Curtains', 'Towels', 'Throws'] },
-  'garden-outdoor': { name: 'Garden & Outdoor',        icon: 'plant',   essentials: ['Garden furniture', 'Parasol', 'BBQ', 'Planters'] },
-
-  // ---- Technology ----
-  smartphones:          { name: 'Smartphones',              icon: 'phone',    essentials: ['Phone', 'Case', 'Screen protector', 'Charger'] },
-  'laptops-computers':  { name: 'Laptops & Computers',      icon: 'laptop',   essentials: ['Laptop', 'Mouse', 'Monitor', 'Backpack'] },
-  wearables:            { name: 'Wearables & Smartwatches', icon: 'watch',    essentials: ['Smartwatch', 'Fitness band', 'Charging dock', 'Strap'] },
-  'audio-headphones':   { name: 'Audio & Headphones',       icon: 'headphones', essentials: ['Headphones', 'Earbuds', 'Speaker', 'DAC'] },
-  'tv-video':           { name: 'TV & Video',               icon: 'tv',       essentials: ['Television', 'Soundbar', 'Streaming stick', 'Wall mount'] },
-  cameras:              { name: 'Cameras',                  icon: 'camera',   essentials: ['Camera body', 'Lens', 'Memory card', 'Tripod'] },
-  gaming:               { name: 'Gaming',                   icon: 'gamepad',  essentials: ['Console', 'Controller', 'Headset', 'Games'] },
-  'home-appliances':    { name: 'Home Appliances',          icon: 'appliance', essentials: ['Vacuum cleaner', 'Air fryer', 'Coffee machine', 'Blender'] },
-};
-
-const CATEGORY_META: Record<Category, { name: string; blurb: string }> = {
-  sport: { name: 'Sport', blurb: 'Find the right gear for the sport you actually do, with every store’s price side by side.' },
-  home:  { name: 'Home & Furniture', blurb: 'Furnish every room and compare the same sofa, table or lamp across every store.' },
-  tech:  { name: 'Technology', blurb: 'See what a phone, laptop or TV really costs across every major store.' },
-};
-
+// Read from the category TREE (007_category_tree.sql, metadata from 014), the
+// same source /api/categories/.../products uses. It used to read the legacy
+// product.subcategory text column plus a hardcoded name/icon table here, so
+// the subcategory tiles and the product grid on one page could disagree.
+//
+// A subcategory is listed only when it has at least one published product in
+// it or below it, so the browse page never advertises an empty shelf.
 export async function getCategory(cat: string): Promise<CategoryPage | null> {
-  if (!['home', 'sport', 'tech'].includes(cat)) return null;
+  if (!CATEGORIES.includes(cat as Category)) return null;
   const category = cat as Category;
 
-  // Subcategories are derived from what is actually in the database, so the
-  // browse page can never advertise a subcategory with nothing behind it.
-  const rows = await sql<{ subcategory: string }[]>`
-    select distinct subcategory from product
-     where status = 'published' and category = ${category} and subcategory is not null
-     order by subcategory`;
+  const [root] = await sql<{ name: string; blurb: string | null }[]>`
+    select name, blurb from category
+     where path = ${category} and parent_id is null and is_active limit 1`;
+  if (!root) return null;
+
+  const rows = await sql<{ slug: string; name: string; icon: string | null; essentials: string[] }[]>`
+    select c.slug, c.name, c.icon, c.essentials
+      from category c
+      join category parent on parent.id = c.parent_id and parent.path = ${category}
+     where c.is_active
+       and exists (
+         select 1 from products_in_category(c.path) pic
+           join product p on p.id = pic.product_id and p.status = 'published')
+     order by c.position, c.name`;
 
   return {
     category,
-    name: CATEGORY_META[category].name,
-    blurb: CATEGORY_META[category].blurb,
+    name: root.name,
+    blurb: root.blurb ?? '',
     subcategories: rows.map((r) => ({
-      id: r.subcategory,
-      name: SUBCATEGORY_META[r.subcategory]?.name ?? r.subcategory,
-      icon: SUBCATEGORY_META[r.subcategory]?.icon ?? 'tag',
-      essentials: SUBCATEGORY_META[r.subcategory]?.essentials ?? [],
+      id: r.slug,
+      name: r.name,
+      icon: r.icon ?? 'tag',
+      essentials: r.essentials ?? [],
     })),
   };
 }
@@ -226,29 +249,44 @@ export async function basketItemsWithOffers(ids: string[]) {
   const rows = await sql<ProductRow[]>`
     select ${PRODUCT_COLS} from product p
      where (p.contract_id = any(${ids}) or p.id::text = any(${ids}))
-       and p.status = 'published'`;
+       and ${VISIBLE_PRODUCT}`;
   const offers = await offersFor(rows.map((r) => r.id));
 
   // Preserve the caller's order — the basket page lists items as the user added
   // them, and returning them in database order would silently reshuffle it.
-  const byKey = new Map(rows.map((r) => [r.contract_id ?? String(r.id), r]));
+  // Index by BOTH ids, so a basket holding either spelling still resolves.
+  const byKey = new Map<string, ProductRow>();
+  for (const r of rows) {
+    byKey.set(String(r.id), r);
+    if (r.contract_id) byKey.set(r.contract_id, r);
+  }
+  const seen = new Set<string>();
   return ids
     .map((id) => byKey.get(id))
-    .filter((r): r is ProductRow => Boolean(r))
+    .filter((r): r is ProductRow => {
+      if (!r || seen.has(String(r.id))) return false;
+      seen.add(String(r.id));
+      return true;
+    })
     .map((r) => ({
-      productId: r.contract_id ?? String(r.id),
+      productId: publicProductId(r.contract_id, r.id),
       productName: r.title,
-      offers: offers.get(String(r.id)) ?? [],
+      // The planner picks the cheapest offer per item, so only offers a
+      // shopper can actually buy are candidates. /basket/compare applies the
+      // same rule, so the two endpoints now agree.
+      offers: (offers.get(String(r.id)) ?? []).filter((o) => o.inStock),
     }));
 }
 
 export async function getDeliveryRules(): Promise<DeliveryRule[]> {
-  const rows = await sql<{ slug: string; delivery_fee_cents: number; free_above_cents: number }[]>`
+  const rows = await sql<{ slug: string; delivery_fee_cents: number; free_above_cents: number | null }[]>`
     select slug, delivery_fee_cents, free_above_cents from retailer where is_active order by slug`;
   return rows.map((r) => ({
     store: r.slug,
     fee: toEuros(r.delivery_fee_cents),
-    freeAbove: toEuros(r.free_above_cents),
+    // NULL = no free-delivery threshold (012). Omitting the key is how the
+    // contract says that; sending 0 meant "free above €0", i.e. always free.
+    ...(r.free_above_cents == null ? {} : { freeAbove: toEuros(r.free_above_cents) }),
   }));
 }
 
@@ -284,34 +322,42 @@ export async function compareBasket(req: BasketRequest): Promise<BasketResult> {
 export async function getPriceHistory(id: string): Promise<PriceHistory | null> {
   const [row] = await sql<{ id: string; contract_id: string | null }[]>`
     select p.id, p.contract_id from product p
-     where ${byId(id)} and p.status = 'published' limit 1`;
+     where ${byId(id)} and ${VISIBLE_PRODUCT} limit 1`;
   if (!row) return null;
 
-  const publicId = row.contract_id ?? String(row.id);
+  const publicId = publicProductId(row.contract_id, row.id);
 
-  // One point per day: the cheapest observation that day, and which retailer
-  // it came from. The contract's PricePoint carries the store, so a chart can
-  // show who was cheapest when — which is the interesting part.
-  const rows = await sql<{ day: Date; price_cents: number; slug: string }[]>`
+  // One point per day: the cheapest IN-STOCK delivered price that day, and the
+  // retailer it came from. Delivered = price + shipping, the same basis as the
+  // current minimum below and as Offer.price, so "lowest in 30 days" compares
+  // like with like. Observations from before 013 have no shipping recorded
+  // (NULL, read as 0) and no currency (NULL, read as EUR — ingest refused
+  // everything else long before that migration).
+  const rows = await sql<{ day: Date; total_cents: number; slug: string }[]>`
     select distinct on (day)
            date_trunc('day', po.observed_at)::date as day,
-           po.price_cents,
+           (po.price_cents + coalesce(po.shipping_cents, 0))::int as total_cents,
            r.slug
       from price_observation po
-      join retailer r on r.id = po.retailer_id
+      join retailer r on r.id = po.retailer_id and r.is_active
      where po.product_id = ${row.id}
        and po.observed_at >= now() - interval '30 days'
-     order by day asc, po.price_cents asc`;
+       and po.in_stock
+       and coalesce(po.currency, 'EUR') = 'EUR'
+     order by day asc, total_cents asc`;
 
   const points: PricePoint[] = rows.map((r) => ({
     at: r.day.toISOString(),
     store: r.slug,
-    price: toEuros(r.price_cents),
+    price: toEuros(r.total_cents),
   }));
 
+  // The same live, in-stock offers the product page ranks first.
   const [cur] = await sql<{ m: number | null }[]>`
-    select min(price_cents + shipping_cents)::int as m
-      from offer where product_id = ${row.id}`;
+    select min(o.price_cents + o.shipping_cents)::int as m
+      from offer o
+      join retailer r on r.id = o.retailer_id
+     where o.product_id = ${row.id} and ${LIVE_OFFER} and o.in_stock`;
 
   if (points.length === 0 && cur?.m == null) {
     return { productId: publicId, points: [], currentMin: 0, min30: 0, max30: 0, isLowest30: false };
@@ -331,61 +377,92 @@ export async function getPriceHistory(id: string): Promise<PriceHistory | null> 
 }
 
 // ---------------------------------------------------------------------------
-// POST /api/personalise — mirrors lib/profile.ts so client and server agree.
+// POST /api/personalise — mirrors frontend lib/profile.ts so client and server agree.
 // ---------------------------------------------------------------------------
+// Kept rule-for-rule and reason-for-reason identical to scoreProduct() in the
+// front end (English reasons, the same penalties, the same affinity rule). If
+// you change one, change the other — or retire one of them.
+const BUDGET_LABEL: Record<BudgetBand, string> = { value: 'value', mid: 'mid', premium: 'premium' };
+const PRIORITY_LABEL: Record<Priority, string> = { price: 'price', quality: 'quality', newest: 'newest' };
+
 export async function personalise(
   productIds: string[],
   profile: ShopperProfile | null,
   observed?: ObservedSignals | null
 ): Promise<PersonalisedProduct[]> {
+  if (productIds.length === 0) return [];
   const rows = await sql<ProductRow[]>`
     select ${PRODUCT_COLS} from product p
      where (p.contract_id = any(${productIds}) or p.id::text = any(${productIds}))
-       and p.status = 'published'`;
+       and ${VISIBLE_PRODUCT}`;
   const products = rows.map(toProduct);
 
   if (!profile) return products.map((product) => ({ product, matchScore: 50, reasons: [] }));
 
-  const BANDS = ['value', 'mid', 'premium'];
+  const merged: ShopperProfile = observed
+    ? { ...profile, viewedProductIds: observed.viewedProductIds, purchasedProductIds: observed.purchasedProductIds }
+    : profile;
+
   return products
-    .map((product) => {
-      let score = 50;
-      const reasons: string[] = [];
-      const s = product.specs ?? {};
-
-      const want = profile.budget?.[product.category];
-      if (want && s.tier) {
-        const d = Math.abs(BANDS.indexOf(want) - BANDS.indexOf(s.tier));
-        if (d === 0) { score += 20; reasons.push(`Past bij je budget (${want})`); }
-        else if (d >= 2) score -= 15;
-      }
-
-      if (profile.priority === 'quality' && Number(s.quality) >= 4) {
-        score += 18; reasons.push('Hoog beoordeeld op kwaliteit');
-      } else if (profile.priority === 'newest' && Number(s.released) >= 2026) {
-        score += 18; reasons.push('Nieuwste model');
-      } else if (profile.priority === 'price' && s.tier === 'value') {
-        score += 18; reasons.push('Scherp geprijsd');
-      }
-
-      const detail = profile.detail?.[product.subcategory];
-      if (detail?.niveau && s.level && detail.niveau === s.level) {
-        score += 12; reasons.push(`Voor ${s.level} sporters`);
-      }
-      if (profile.categories?.includes(product.category)) score += 5;
-
-      if (observed) {
-        if (observed.purchasedProductIds?.includes(product.id)) score -= 40;
-        if (observed.viewedProductIds?.includes(product.id)) score += 4;
-        if (observed.clickedOutProductIds?.includes(product.id)) score += 8;
-        if ((observed.categoryAffinity?.[product.category] ?? 0) >= 3) score += 6;
-      }
-
-      return {
-        product,
-        matchScore: Math.max(0, Math.min(100, Math.round(score))),
-        reasons: reasons.slice(0, 2),
-      };
-    })
+    .map((product) => scoreProduct(product, merged, observed ?? null))
     .sort((a, b) => b.matchScore - a.matchScore);
+}
+
+function scoreProduct(
+  product: Product, profile: ShopperProfile, observed: ObservedSignals | null
+): PersonalisedProduct {
+  let score = 50;
+  const reasons: string[] = [];
+  const specs = product.specs ?? {};
+
+  const wantBudget = profile.budget?.[product.category];
+  const tier = specs.tier as BudgetBand | undefined;
+  if (wantBudget && tier) {
+    if (tier === wantBudget) {
+      score += 20;
+      reasons.push(`Fits your budget (${BUDGET_LABEL[wantBudget]})`);
+    } else if (
+      (wantBudget === 'value' && tier === 'premium') ||
+      (wantBudget === 'premium' && tier === 'value')
+    ) {
+      score -= 15;
+    }
+  }
+
+  if (profile.priority === 'quality' && specs.quality) {
+    if (Number(specs.quality) >= 4) { score += 18; reasons.push('Highly rated for quality'); }
+  }
+  if (profile.priority === 'newest' && specs.released) {
+    if (Number(specs.released) >= 2026) { score += 18; reasons.push('Newest model'); }
+  }
+  if (profile.priority === 'price' && tier === 'value') {
+    score += 18; reasons.push('Sharply priced');
+  }
+
+  const detail = profile.detail?.[product.subcategory];
+  if (detail?.niveau && specs.level && detail.niveau === specs.level) {
+    score += 12;
+    reasons.push(`For ${detail.niveau} level`);
+  }
+
+  if (profile.categories?.includes(product.category)) score += 5;
+
+  if (profile.purchasedProductIds?.includes(product.id)) score -= 40;
+  if (profile.viewedProductIds?.includes(product.id)) score += 4;
+  if (observed) {
+    if (observed.clickedOutProductIds?.includes(product.id)) {
+      score += 8;
+      reasons.push('You showed interest in this');
+    }
+    const affinity = observed.categoryAffinity?.[product.category] ?? 0;
+    if (affinity >= 3 && profile.categories?.includes(product.category)) score += 6;
+  }
+
+  if (reasons.length === 0) reasons.push(`Chosen for ${PRIORITY_LABEL[profile.priority]}`);
+
+  return {
+    product,
+    matchScore: Math.max(0, Math.min(100, Math.round(score))),
+    reasons: reasons.slice(0, 2),
+  };
 }

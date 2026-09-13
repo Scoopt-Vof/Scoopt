@@ -1,9 +1,17 @@
 # Getting real prices in — which APIs, in what order
 
-Five live sources are wired up. All of them implement the same `RetailerSource`
-interface, so adding one changes exactly one file and nothing else.
+One live price source is wired up today: **eBay**, on the Dutch and German
+marketplaces (`ebay-nl`, `ebay-de`). Every source implements the same
+`RetailerSource` interface (`src/sources/types.ts`), so adding one changes
+exactly one file plus a line in `src/sources/registry.ts`.
 
 `npm run ingest -- --list` shows what's available and what each needs.
+
+> **Removed:** the Kroger, Best Buy and Open Prices adapters, and `ebay-gb`.
+> Kroger and Best Buy are US retailers pricing in USD, and eBay UK prices in
+> GBP — ingest refuses every non-EUR offer (nothing converts currency), so they
+> could never write a row. Open Prices was never registered. The research on
+> them is kept at the bottom of this file so nobody re-does it.
 
 ---
 
@@ -24,30 +32,23 @@ Their terms define an Affiliate Partnerkanaal as a **"gebruiksklare"** (ready
 for use) website or web application. A parked domain doesn't count.
 
 So the proof of concept isn't a nice-to-have you show alongside the application
-— **it is the application**. That reorders everything: build something live and
-real-looking first, then apply. Approval then takes ~2 working days (7 by the
-terms), and only after that does the API-key button appear in your affiliate
-dashboard. There is no bol sandbox, so you cannot touch bol data before this.
+— **it is the application**. Build something live and real-looking first, then
+apply. Approval then takes ~2 working days (7 by the terms), and only after that
+does the API-key button appear in your affiliate dashboard. There is no bol
+sandbox.
 
-Good news buried in the terms: the words *vergelijkingssite* and
-*prijsvergelijker* appear nowhere in them. Comparison is not banned. The two
-clauses that bite are **2.6(g)** (spider/stock-alert sites — so use APIs and
-never crawl bol) and **2.6(i)** (showing products *"zonder enige toegevoegde
-waarde"*). bol's own guidance names *"productvergelijkingen"* as legitimate
-added value, so use their vocabulary in the application.
+Comparison is not banned: *vergelijkingssite* and *prijsvergelijker* appear
+nowhere in the terms. The clauses that bite are **2.6(g)** (spider/stock-alert
+sites — use APIs, never crawl bol) and **2.6(i)** (products *"zonder enige
+toegevoegde waarde"*). bol's own guidance names *"productvergelijkingen"* as
+legitimate added value, so use their vocabulary in the application.
 
-### 2. Five retailers with no EAN overlap is not a comparison
+### 2. Retailers with no EAN overlap are not a comparison
 
-This is the trap to design around. Kroger sells US groceries, Best Buy sells US
-electronics, Albert Heijn sells Dutch groceries. They share almost no EANs. Wire
-up five sources naively and you get five catalogues sitting next to each other
-with an empty comparison on every page — which demonstrates the opposite of what
-you're trying to show.
-
-**The fix is eBay's marketplace header.** One integration, three sources:
-`ebay-nl`, `ebay-de`, `ebay-gb`. Same branded products, three real prices, one
-EAN. That produces genuine comparison rows, which is the only thing a reviewer
-at bol or Odyssey will actually look at.
+Sources that share no EANs give you catalogues side by side with an empty
+comparison on every page. **eBay's marketplace header is the workaround:** one
+integration, several marketplaces, the same branded products at different prices
+against one EAN.
 
 The ingest job prints this number at the end of every run:
 
@@ -59,57 +60,10 @@ products with 2+ retailer offers (real comparisons): 15
 
 ---
 
-## The ladder
-
-### Step 1 — today, no signup at all (15 minutes)
+## eBay — setup (~1 day, mostly waiting)
 
 ```bash
-npm run ingest -- openprices-ah openprices-jumbo
-```
-
-Open Prices needs no API key, no account, no approval. Crowd-sourced Dutch
-supermarket prices attached to Open Food Facts products, so every record already
-carries a valid EAN-13. Volume is small — around 285 Dutch price points — but
-it proves the whole path against a real third-party API over the real internet.
-
-⚠️ **ODbL licence — decide this before you design the production schema.**
-This data is ODbL 1.0. Loading it into Postgres creates a "Derivative Database"
-(§4.4b), and publishing a site from it counts as publicly using that derivative
-(§4.4c), which triggers share-alike (§4.4a) *and* an obligation to give anyone
-who asks a machine-readable copy of the derivative database (§4.6).
-
-The escape hatch is §4.5(a), the Collective Database clause: keep this data
-**unmodified in its own tables**, keep your own commercially-collected offers in
-**separate tables**, and join only at query time. Then only the Open Prices
-tables are ODbL — which they already were, so nothing of yours is infected.
-What breaks it is merging Open Prices fields into your canonical `product`
-table. For the PoC this is fine; before production, segregate or drop it.
-Attribution is required wherever it's displayed.
-
-### Step 2 — instant credentials, ~30 minutes
-
-```bash
-npm run ingest -- kroger
-```
-
-1. Sign up at <https://developer.kroger.com/create-account/> — free, instant
-2. Register an app → Client ID + Client Secret
-3. Put `KROGER_CLIENT_ID` / `KROGER_CLIENT_SECRET` in `.env`
-
-The fastest route from zero to a real live price with a real UPC. US groceries,
-so useless as a Scoopt retailer — its job is to prove OAuth2 client credentials,
-token caching, rate limiting and pagination all work against someone else's
-server. Quota 10,000/day. Note prices are per-store, so the adapter resolves a
-`locationId` first; without one the API returns products with no prices at all.
-
-Their developer terms are robots-blocked to automated readers, so their stance
-on aggregation is **unverified** — read them yourself before going past a
-private prototype.
-
-### Step 3 — the one that matters, ~1 day
-
-```bash
-npm run ingest -- ebay-nl ebay-de ebay-gb
+npm run ingest -- ebay-nl ebay-de
 ```
 
 1. Register at <https://developer.ebay.com/signin?tab=register> — account
@@ -118,38 +72,32 @@ npm run ingest -- ebay-nl ebay-de ebay-gb
 3. **The gate everyone hits:** before your production keyset activates, eBay
    requires you to subscribe to or opt out of marketplace account-deletion
    notifications. Subscribing needs a publicly reachable HTTPS callback URL —
-   a free Cloudflare Worker or Vercel function is enough, it does not need to be
-   your real product. Opting out is only available if you *don't persist eBay
-   data*, which is not true of a price-comparison database, so **don't attest to
-   that falsely.** Stand up the endpoint.
+   a free Cloudflare Worker or Vercel function is enough. Opting out is only
+   available if you *don't persist eBay data*, which is not true of a
+   price-comparison database, so **don't attest to that falsely.**
 4. Put `EBAY_CLIENT_ID` / `EBAY_CLIENT_SECRET` in `.env`
+5. Optional but needed to earn anything: join the **eBay Partner Network** and
+   put your campaign id in `EPN_CAMPAIGN_ID`. Stored links then become
+   affiliate links.
 
-Real live prices, in EUR, from a Dutch marketplace, with GTINs. This is the
-backbone.
+**Constraints designed around in the adapter (`src/sources/ebay.ts`):**
 
-**Two constraints designed around in the adapter.** `gtin` is not returned by
-search — only by `getItem` — so every product costs one search slot plus one
-detail call, against a default quota of **5,000 calls/day**. That's why
-`EBAY_MAX_ITEMS_PER_QUERY` defaults to 8. And search-by-GTIN is documented as
-UPC-only, so you can't reliably go EAN → item; the flow is keyword → item →
-EAN. Keep the same `EBAY_QUERIES` across all three marketplaces or you won't get
-overlap.
+- `gtin` is not returned by search — only by `getItem` — so every product costs
+  one search slot plus one detail call, against a default quota of **5,000
+  calls/day**. That's why `EBAY_MAX_ITEMS_PER_QUERY` defaults to 8.
+- Search-by-GTIN is documented as UPC-only, so the flow is keyword → item → EAN.
+- Only **new-condition** listings are fetched, so used items are never compared
+  against new ones.
+- Several sellers often list the same EAN. The adapter keeps the **cheapest
+  delivered** listing per EAN per marketplace (the database holds one offer per
+  product per marketplace).
+- The search terms come from the built-in, category-tagged `DEFAULT_QUERIES`
+  list. **Leave `EBAY_QUERIES` unset**: if set, it replaces that list and tags
+  every result as sport/running.
 
-### Step 4 — optional fourth shape
-
-```bash
-npm run ingest -- bestbuy
-```
-
-Key from <https://developer.bestbuy.com>. Simplest auth of the set — an API key
-in the query string.
-
-⚠️ Two problems. Their published policy **rejects free email domains** (Gmail,
-Yahoo), so use an address on your own domain. And their terms forbid using the
-service *"for the purposes of analyzing, receiving or reviewing information
-regarding Best Buy pricing"* on behalf of third parties, and require Best Buy to
-sit in the *"first or primary tier"* of any commerce options you show. A neutral
-comparison site is against the grain of both. **Prototype only. Never ship it.**
+Offers that an ingest run has not refreshed within `OFFER_MAX_AGE_HOURS`
+(default 48) are hidden from the API, so ingest needs to run at least that often
+for prices to stay visible.
 
 ---
 
@@ -157,52 +105,30 @@ comparison site is against the grain of both. **Prototype only. Never ship it.**
 
 | Source | Verdict |
 |---|---|
-| **Etsy** | No GTIN/EAN/UPC field at all. Cannot join an EAN graph. Terms also cap caching at 6 hours, which forbids a price-history store. |
+| **Kroger** | Real OAuth2 API with UPCs, but US groceries in USD. Removed. Developer terms were robots-blocked; stance on aggregation unverified. |
+| **Best Buy** | US electronics in USD. Terms forbid using the service for analysing Best Buy pricing on behalf of third parties and require Best Buy in the first tier of commerce options. Removed. |
+| **Open Prices** | Keyless, Dutch supermarket prices with EANs, but tiny volume and **ODbL** share-alike: merging it into `product` would make the derivative database ODbL. Removed. |
+| **eBay UK (`ebay-gb`)** | Prices in GBP; refused by ingest without currency conversion. Removed from the registry. |
+| **Etsy** | No GTIN/EAN/UPC field at all. Terms also cap caching at 6 hours, which forbids a price-history store. |
 | **Zalando** | Shop API archived Aug 2018. No successor. |
 | **OTTO / Kaufland** | Seller-only APIs, need a signed marketplace contract. |
 | **Walmart** | No longer issues new API keys; affiliate route is manual review. |
-| **Target / Home Depot** | No public API. `developer.homedepot.com` doesn't even resolve. Everything sold as an "API" is a scraper. |
+| **Target / Home Depot** | No public API. Everything sold as an "API" is a scraper. |
 | **Amazon** | PA-API 5.0 retired May 2026; Creators API gated on qualifying affiliate sales. |
-| **Rakuten** | Product Search does return JAN + multi-seller spread, but it's Japan-only, and the ToS bar competing services and restrict data storage. |
+| **Rakuten** | Japan-only, and the ToS bar competing services and restrict data storage. |
 | **UPCitemdb** | Keyless, but offers are 2014–2022 snapshots and EU products are missing or miscategorised. |
-| **Barcode Lookup** | Right data model (`stores[]` with country + currency), but $99/mo minimum. |
-| **Lowe's** | `portal.apim.lowes.com` exists and claims self-service; API list renders nothing publicly. Unverified — 10 minutes to check if you're curious. |
+| **Barcode Lookup** | Right data model, but $99/mo minimum. |
 
 ---
 
 ## Environment variables
 
+See `.env.example` for the full, commented list. The eBay-specific ones:
+
 ```bash
-# eBay — developer.ebay.com → Application Keys (Production)
 EBAY_CLIENT_ID=
 EBAY_CLIENT_SECRET=
-EBAY_QUERIES=Garmin Forerunner 265,Nike Pegasus 41,Adidas Ultraboost 22
 EBAY_MAX_ITEMS_PER_QUERY=8
-
-# Kroger — developer.kroger.com
-KROGER_CLIENT_ID=
-KROGER_CLIENT_SECRET=
-KROGER_ZIP=45202
-
-# Best Buy — developer.bestbuy.com (company email domain required)
-BESTBUY_API_KEY=
-
-# Sent on every outbound request. Put a real contact address here —
-# it is the difference between being rate-limited and being emailed.
+EPN_CAMPAIGN_ID=
 HTTP_USER_AGENT=Scoopt/0.1 (price comparison; +https://scoopt.nl; you@scoopt.nl)
 ```
-
----
-
-## A note on what is and isn't proven
-
-The pipeline, the schema, the EAN matching, the comparison ordering and the
-36 tests were all run end-to-end against a real Postgres and they pass.
-
-The five live adapters were **written but not executed** — the environment they
-were built in has no outbound network access, so the first real call to eBay,
-Kroger, Best Buy and Open Prices will happen on your machine. Expect small field
-surprises on first contact; that's what `raw/` archives are for. The failure
-mode to watch for is an adapter returning zero offers rather than throwing,
-which usually means a query returned nothing rather than the credentials being
-wrong. `npm run ingest -- <source>` prints per-query counts for exactly this.

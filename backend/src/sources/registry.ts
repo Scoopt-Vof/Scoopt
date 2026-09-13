@@ -5,7 +5,7 @@ import { EbaySource } from './ebay';
  * Every source, keyed by the name you pass on the command line:
  *
  *   npm run ingest -- ebay-nl
- *   npm run ingest -- ebay-nl ebay-de ebay-gb   (comparison rows appear here)
+ *   npm run ingest -- ebay-nl ebay-de   (comparison rows appear here)
  *   npm run ingest -- all
  *
  * `credentials` says what you need before it will run.
@@ -39,11 +39,9 @@ export const SOURCES: Record<string, SourceEntry> = {
     credentials: ['EBAY_CLIENT_ID', 'EBAY_CLIENT_SECRET'],
     blurb: 'Same products, German marketplace — this is where comparison rows come from.',
   },
-  'ebay-gb': {
-    build: () => new EbaySource('EBAY_GB'),
-    credentials: ['EBAY_CLIENT_ID', 'EBAY_CLIENT_SECRET'],
-    blurb: 'Third price against the same EAN.',
-  },
+  // ebay-gb was removed: eBay UK prices in GBP, ingest refuses non-EUR offers
+  // (nothing converts currency), so every call spent eBay quota for nothing.
+  // Re-add it only together with currency conversion.
 
   // ── Further affiliate programmes plug in here, one entry each. Every source
   //    must return prices a retailer actually charges. Anything with invented

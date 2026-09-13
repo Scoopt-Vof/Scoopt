@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { sql } from '../src/lib/db';
 import { ingest } from '../src/ingest/run';
 import { TestCatalogueSource } from './helpers/test-source';
-import { productHandler, searchHandler } from '../src/api/handlers';
+import { productHandler, basketCompareHandler } from '../src/api/contract-handlers';
 import { ProductWithOffersSchema } from '../src/contract/schemas';
 
 /**
@@ -11,8 +11,11 @@ import { ProductWithOffersSchema } from '../src/contract/schemas';
  * Everything in api.test.ts passes with one retailer, and one retailer is a
  * catalogue, not a comparison. These tests put THREE retailers on the SAME
  * EANs at different prices and assert the things a user would actually notice:
- * that the cheapest offer wins, that shipping is counted, and that the product
- * name doesn't change identity depending on which feed ran last.
+ * that the cheapest offer wins, that shipping is counted, that an out-of-stock
+ * offer never outranks one you can buy, and that the product name doesn't
+ * change identity depending on which feed ran last.
+ *
+ * They exercise src/api/contract-handlers.ts — the API the website calls.
  */
 
 // Same EANs, deliberately different prices: 100%, 92%, 110%.
@@ -28,11 +31,9 @@ beforeAll(async () => {
   await ingest(cheaper);               // 92%  ← should always win
   await ingest(dearer);                // 110%
 
-  // Products now enter as 'draft' and are promoted by the classifier's publish
-  // gate (see src/ingest/run.ts and src/categorisation/persist.ts). These tests
-  // exercise the PRICE path with a fixture catalogue and pass no classifier, so
-  // nothing promotes them — publish them explicitly. Classification has its own
-  // suite in categorisation.test.ts.
+  // Products enter as 'draft' and are promoted by the classifier's publish
+  // gate. These tests exercise the PRICE path with no classifier, so publish
+  // them explicitly. Classification has its own suite in categorisation.test.ts.
   await sql`update product set status = 'published' where status = 'draft'`;
 
   const [row] = await sql<{ id: number }[]>`select id from product order by id limit 1`;
@@ -40,6 +41,8 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => { await sql.end(); });
+
+const getProduct = async (id: string) => (await productHandler(new Request('http://x/'), id)).json();
 
 describe('multi-retailer comparison', () => {
   it('attaches three retailers to one product via EAN alone', async () => {
@@ -57,25 +60,22 @@ describe('multi-retailer comparison', () => {
   });
 
   it('returns offers cheapest-first, and the 92% retailer is top', async () => {
-    const res = await productHandler(new Request('http://x/'), productId);
-    const body = await res.json();
+    const body = await getProduct(productId);
 
     const parsed = ProductWithOffersSchema.safeParse(body);
     if (!parsed.success) console.error(parsed.error.format());
     expect(parsed.success).toBe(true);
 
     expect(body.offers).toHaveLength(3);
-    expect(body.offers[0].retailer.slug).toBe('sportshop');
-    expect(body.offers.at(-1).retailer.slug).toBe('bigsport');
+    expect(body.offers[0].store).toBe('sportshop');
+    expect(body.offers.at(-1).store).toBe('bigsport');
 
-    const totals = body.offers.map((o: any) => o.totalCents);
-    expect(totals).toEqual([...totals].sort((a: number, b: number) => a - b));
-    expect(body.fromCents).toBe(totals[0]);
+    const prices = body.offers.map((o: any) => o.price);
+    expect(prices).toEqual([...prices].sort((a: number, b: number) => a - b));
   });
 
   it('ranks on price PLUS shipping, not price alone', async () => {
     // Construct the trap directly: cheaper item, dearer once posted.
-    const [p] = await sql<{ id: number }[]>`select id from product limit 1`;
     await sql`
       insert into retailer (slug, name, homepage_url, source_kind)
       values ('trap', 'TrapShop', 'https://trap.invalid', 'fixture')
@@ -83,19 +83,33 @@ describe('multi-retailer comparison', () => {
     const [trap] = await sql<{ id: number }[]>`select id from retailer where slug = 'trap'`;
 
     const [cheapest] = await sql<{ t: number }[]>`
-      select min(price_cents + shipping_cents)::int as t from offer where product_id = ${p.id}`;
+      select min(price_cents + shipping_cents)::int as t from offer where product_id = ${productId}`;
 
     // 1 cent cheaper on the sticker, 500 cents dearer delivered.
     await sql`
       insert into offer (product_id, retailer_id, retailer_sku, price_cents, shipping_cents, in_stock, product_url)
-      values (${p.id}, ${trap.id}, 'TRAP-1', ${cheapest.t - 1}, 500, true, 'https://trap.invalid/p/1')
+      values (${productId}, ${trap.id}, 'TRAP-1', ${cheapest.t - 1}, 500, true, 'https://trap.invalid/p/1')
       on conflict (product_id, retailer_id) do update set price_cents = excluded.price_cents`;
 
-    const res = await productHandler(new Request('http://x/'), String(p.id));
-    const body = await res.json();
-    expect(body.offers[0].retailer.slug).not.toBe('trap');
+    try {
+      const body = await getProduct(productId);
+      expect(body.offers[0].store).not.toBe('trap');
+    } finally {
+      await sql`delete from offer where retailer_id = ${trap.id}`;
+    }
+  });
 
-    await sql`delete from offer where retailer_id = ${trap.id}`;
+  it('never ranks an out-of-stock offer above one you can buy', async () => {
+    const [shop] = await sql<{ id: number }[]>`select id from retailer where slug = 'sportshop'`;
+    await sql`update offer set in_stock = false where product_id = ${productId} and retailer_id = ${shop.id}`;
+    try {
+      const body = await getProduct(productId);
+      expect(body.offers[0].store).not.toBe('sportshop');
+      expect(body.offers.at(-1)).toMatchObject({ store: 'sportshop', inStock: false });
+      expect(ProductWithOffersSchema.safeParse(body).success).toBe(true);
+    } finally {
+      await sql`update offer set in_stock = true where product_id = ${productId} and retailer_id = ${shop.id}`;
+    }
   });
 
   it('keeps one stable product title instead of letting the last feed rewrite it', async () => {
@@ -106,12 +120,12 @@ describe('multi-retailer comparison', () => {
     expect(after.map((r) => r.title)).toEqual(before.map((r) => r.title));
   });
 
-  it('search reports how many retailers each product has', async () => {
-    const res = await searchHandler(new Request('http://x/api/search?q=Testmerk'));
-    expect(res.status).toBe(200);
+  it('basket compare ranks the cheapest complete store first', async () => {
+    const res = await basketCompareHandler(new Request('http://x/api/basket/compare', {
+      method: 'POST', body: JSON.stringify({ items: [productId] }),
+    }));
     const body = await res.json();
-    expect(body.length).toBeGreaterThan(0);
-    expect(body[0].fromCents).toBeGreaterThan(0);
+    expect(body.cheapestComplete.store).toBe('sportshop');
   });
 
   it('counts real comparisons — the number that IS the proof of concept', async () => {

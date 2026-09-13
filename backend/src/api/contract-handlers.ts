@@ -1,10 +1,14 @@
 import * as q from './contract-queries';
+import {
+  json, HttpError, intParam, readJson, stringArray,
+  MAX_BASKET_ITEMS, MAX_PERSONALISE_IDS,
+} from './respond';
 
 /**
  * The eight contract endpoints, database-backed, returning Josh's exact shapes.
  *
- * Same `Request → Response` design as the other handlers, so each becomes a
- * two-line Next.js route:
+ * Same `Request → Response` design throughout, so each becomes a two-line
+ * Next.js route if the back end is ever folded into the front end:
  *
  *   // app/api/product/[id]/route.ts
  *   import { productHandler } from '@/src/api/contract-handlers';
@@ -14,19 +18,10 @@ import * as q from './contract-queries';
  * The error bodies and status codes match Josh's existing routes exactly —
  * `{ error: "Product not found" }` and so on — because the front end already
  * treats a 404 as "return null" and anything else as a thrown error.
+ *
+ * Client errors are thrown as HttpError and turned into JSON 4xx responses by
+ * contract-server.ts, which also applies CORS to every response.
  */
-
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      'content-type': 'application/json; charset=utf-8',
-      'access-control-allow-origin': '*',
-      'access-control-allow-headers': 'content-type',
-      'access-control-allow-methods': 'GET,POST,OPTIONS',
-      'cache-control': 'no-store',
-    },
-  });
 
 export async function productHandler(_req: Request, id: string): Promise<Response> {
   const r = await q.getProduct(id);
@@ -34,8 +29,13 @@ export async function productHandler(_req: Request, id: string): Promise<Respons
 }
 
 export async function searchHandler(req: Request): Promise<Response> {
-  // The contract says an empty q returns everything — do not "helpfully" 400.
-  return json(await q.searchProducts(new URL(req.url).searchParams.get('q') ?? ''));
+  const params = new URL(req.url).searchParams;
+  // The contract says an empty q lists the catalogue — do not "helpfully" 400.
+  // It is paged with limit/offset rather than unbounded.
+  return json(await q.searchProducts(params.get('q') ?? '', {
+    limit: intParam(params, 'limit'),
+    offset: intParam(params, 'offset'),
+  }));
 }
 
 export async function categoryHandler(_req: Request, cat: string): Promise<Response> {
@@ -43,24 +43,25 @@ export async function categoryHandler(_req: Request, cat: string): Promise<Respo
   return r ? json(r) : json({ error: 'Category not found' }, 404);
 }
 
+async function basketItems(req: Request): Promise<string[]> {
+  const body = await readJson(req).catch(() => {
+    throw new HttpError(400, 'Body must be { items: string[] }');
+  });
+  return stringArray(body.items, 'items', MAX_BASKET_ITEMS);
+}
+
 export async function basketCompareHandler(req: Request): Promise<Response> {
-  const body = await req.json().catch(() => null);
-  if (!body || !Array.isArray(body.items)) {
-    return json({ error: 'Body must be { items: string[] }' }, 400);
-  }
-  return json(await q.compareBasket({ items: body.items }));
+  const items = await basketItems(req);
+  return json(await q.compareBasket({ items }));
 }
 
 export async function basketPlanHandler(req: Request): Promise<Response> {
-  const body = await req.json().catch(() => null);
-  if (!body || !Array.isArray(body.items)) {
-    return json({ error: 'Body must be { items: string[] }' }, 400);
-  }
-  const [items, deliveryRules] = await Promise.all([
-    q.basketItemsWithOffers(body.items),
+  const items = await basketItems(req);
+  const [planItems, deliveryRules] = await Promise.all([
+    q.basketItemsWithOffers(items),
     q.getDeliveryRules(),
   ]);
-  return json({ items, deliveryRules });
+  return json({ items: planItems, deliveryRules });
 }
 
 export async function priceHistoryHandler(_req: Request, id: string): Promise<Response> {
@@ -79,23 +80,13 @@ export async function trackHandler(req: Request): Promise<Response> {
 }
 
 export async function personaliseHandler(req: Request): Promise<Response> {
-  const body = await req.json().catch(() => null);
-  if (!body || !Array.isArray(body.productIds)) {
-    return json({ error: 'Body must be a PersonaliseRequest' }, 400);
-  }
-  return json(await q.personalise(body.productIds, body.profile ?? null, body.observed ?? null));
-}
-
-export function corsPreflight(): Response {
-  // 204 is a null-body status: passing a body here throws a TypeError,
-  // which contract-server.ts turns into a 500, so every preflight fails.
-  return new Response(null, {
-    status: 204,
-    headers: {
-      'access-control-allow-origin': '*',
-      'access-control-allow-headers': 'content-type',
-      'access-control-allow-methods': 'GET,POST,OPTIONS',
-      'access-control-max-age': '86400',
-    },
+  const body = await readJson(req).catch(() => {
+    throw new HttpError(400, 'Body must be a PersonaliseRequest');
   });
+  const productIds = stringArray(body.productIds, 'productIds', MAX_PERSONALISE_IDS);
+  return json(await q.personalise(
+    productIds,
+    (body.profile as Parameters<typeof q.personalise>[1]) ?? null,
+    (body.observed as Parameters<typeof q.personalise>[2]) ?? null,
+  ));
 }

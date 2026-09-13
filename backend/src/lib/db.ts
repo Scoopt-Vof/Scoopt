@@ -20,8 +20,20 @@ export const sql = postgres(url, {
   idle_timeout: 20,
   // Supabase requires TLS. Local dev over a unix socket / localhost does not.
   ssl: url.includes('supabase.') ? 'require' : false,
+  // Supabase's TRANSACTION pooler (port 6543) cannot hold prepared statements
+  // across transactions, and postgres.js prepares by default — so queries fail
+  // intermittently after switching to it. Turn preparing off there only.
+  prepare: !usesTransactionPooler(url),
   transform: { undefined: null },
 });
+
+function usesTransactionPooler(raw: string): boolean {
+  try {
+    return new URL(raw).port === '6543';
+  } catch {
+    return false;
+  }
+}
 
 export type Sql = typeof sql;
 

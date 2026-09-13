@@ -23,7 +23,7 @@ import type { ProductInput } from './types';
  */
 
 const API_URL = 'https://api.anthropic.com/v1/messages';
-const MODEL = process.env.CLASSIFIER_MODEL ?? 'claude-sonnet-4-5';
+const MODEL = process.env.CLASSIFIER_MODEL ?? 'claude-sonnet-5';
 
 const SYSTEM_PROMPT = `You classify retail products for scoopt, a Dutch price-comparison site.
 

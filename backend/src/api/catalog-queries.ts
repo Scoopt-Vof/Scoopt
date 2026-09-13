@@ -1,4 +1,6 @@
 import { sql } from '../lib/db';
+import { LIVE_OFFER } from '../lib/offers';
+import { publicProductId } from './contract-queries';
 
 /**
  * THE BROWSE READ MODEL.
@@ -20,6 +22,10 @@ export interface CategoryNodeDto {
   name: string;
   depth: number;
   productCount: number;
+  /** Display metadata (014_category_metadata.sql). Null/empty when unset. */
+  blurb: string | null;
+  icon: string | null;
+  essentials: string[];
   children?: CategoryNodeDto[];
 }
 
@@ -32,8 +38,9 @@ export async function getTree(): Promise<CategoryNodeDto[]> {
   const rows = await sql<{
     path: string; slug: string; name: string; depth: number;
     parent_path: string | null; product_count: string;
+    blurb: string | null; icon: string | null; essentials: string[];
   }[]>`
-    select c.path, c.slug, c.name, c.depth,
+    select c.path, c.slug, c.name, c.depth, c.blurb, c.icon, c.essentials,
            case when c.depth = 0 then null
                 else substring(c.path from 1 for length(c.path) - length(c.slug) - 1)
            end as parent_path,
@@ -48,7 +55,9 @@ export async function getTree(): Promise<CategoryNodeDto[]> {
   for (const r of rows) {
     const node: CategoryNodeDto = {
       path: r.path, slug: r.slug, name: r.name, depth: r.depth,
-      productCount: Number(r.product_count), children: [],
+      productCount: Number(r.product_count),
+      blurb: r.blurb, icon: r.icon, essentials: r.essentials ?? [],
+      children: [],
     };
     byPath.set(r.path, node);
     // Rows are ordered by depth, so a parent is always already in the map.
@@ -63,6 +72,9 @@ export interface CategoryDetail {
   path: string;
   slug: string;
   name: string;
+  blurb: string | null;
+  icon: string | null;
+  essentials: string[];
   breadcrumb: { path: string; name: string }[];
   children: CategoryNodeDto[];
   productCount: number;
@@ -71,8 +83,10 @@ export interface CategoryDetail {
 export async function getCategoryByPath(path: string): Promise<CategoryDetail | null> {
   const [node] = await sql<{
     path: string; slug: string; name: string; depth: number; product_count: string;
+    blurb: string | null; icon: string | null; essentials: string[];
   }[]>`
-    select c.path, c.slug, c.name, c.depth, ${COUNT_FOR_PATH} as product_count
+    select c.path, c.slug, c.name, c.depth, c.blurb, c.icon, c.essentials,
+           ${COUNT_FOR_PATH} as product_count
       from category c where c.path = ${path} and c.is_active limit 1`;
   if (!node) return null;
 
@@ -90,8 +104,10 @@ export async function getCategoryByPath(path: string): Promise<CategoryDetail | 
 
   const children = await sql<{
     path: string; slug: string; name: string; depth: number; product_count: string;
+    blurb: string | null; icon: string | null; essentials: string[];
   }[]>`
-    select c.path, c.slug, c.name, c.depth, ${COUNT_FOR_PATH} as product_count
+    select c.path, c.slug, c.name, c.depth, c.blurb, c.icon, c.essentials,
+           ${COUNT_FOR_PATH} as product_count
       from category c
      where c.parent_id = (select id from category where path = ${path})
        and c.is_active
@@ -101,10 +117,14 @@ export async function getCategoryByPath(path: string): Promise<CategoryDetail | 
     path: node.path,
     slug: node.slug,
     name: node.name,
+    blurb: node.blurb,
+    icon: node.icon,
+    essentials: node.essentials ?? [],
     breadcrumb: crumbs.map((c) => ({ path: c.path, name: c.name })),
     children: children.map((c) => ({
       path: c.path, slug: c.slug, name: c.name, depth: c.depth,
       productCount: Number(c.product_count),
+      blurb: c.blurb, icon: c.icon, essentials: c.essentials ?? [],
     })),
     productCount: Number(node.product_count),
   };
@@ -150,8 +170,11 @@ export async function getCategoryProducts(
     select path from category where path = ${path} and is_active limit 1`;
   if (!exists) return null;
 
-  const limit = Math.min(Math.max(opts.limit ?? 48, 1), 200);
-  const offset = Math.max(opts.offset ?? 0, 0);
+  // Non-finite input (e.g. ?limit=abc → NaN) survives Math.min/Math.max and
+  // used to reach Postgres as `limit NaN`. The handler rejects it with a 400;
+  // this is the second lock for any other caller.
+  const limit = Number.isFinite(opts.limit) ? Math.min(Math.max(Math.floor(opts.limit!), 1), 200) : 48;
+  const offset = Number.isFinite(opts.offset) ? Math.max(Math.floor(opts.offset!), 0) : 0;
   const tags = opts.tags?.length ? opts.tags : null;
 
   const [countRow] = await sql<{ c: string }[]>`
@@ -168,21 +191,25 @@ export async function getCategoryProducts(
   // alias. Repeating the min-price subquery in the ORDER BY would work too,
   // and would run it twice.
   const rows = await sql<{
-    id: string; ean: string | null; brand: string; title: string; unit: string | null;
+    id: string; contract_id: string | null; ean: string | null; brand: string; title: string; unit: string | null;
     category: string; subcategory: string | null; image_url: string | null;
     specs: Record<string, string> | null; tags: string[] | null;
     min_price_cents: number | null; offer_count: string;
   }[]>`
     select * from (
-      select p.id, p.ean, p.brand, p.title, p.unit, p.category, p.subcategory,
+      select p.id, p.contract_id, p.ean, p.brand, p.title, p.unit, p.category, p.subcategory,
              p.image_url, p.specs,
              (select array_agg(t.slug order by t.slug) from product_tag pt
                 join tag t on t.id = pt.tag_id and t.is_active
                where pt.product_id = p.id) as tags,
+             -- minPrice and offerCount apply the SAME live-offer rule (see
+             -- lib/offers.ts), so "from €X at N stores" is one consistent claim.
              (select min(o.price_cents + o.shipping_cents)::int from offer o
-                join retailer r on r.id = o.retailer_id and r.is_active
-               where o.product_id = p.id and o.currency = 'EUR') as min_price_cents,
-             (select count(*) from offer o where o.product_id = p.id) as offer_count
+                join retailer r on r.id = o.retailer_id
+               where o.product_id = p.id and ${LIVE_OFFER} and o.in_stock) as min_price_cents,
+             (select count(*) from offer o
+                join retailer r on r.id = o.retailer_id
+               where o.product_id = p.id and ${LIVE_OFFER}) as offer_count
         from products_in_category(${path}) pic
         join product p on p.id = pic.product_id and p.status = 'published'
        where ${tags === null ? sql`true` : sql`
@@ -199,7 +226,8 @@ export async function getCategoryProducts(
     limit,
     offset,
     products: rows.map((r) => ({
-      id: r.id,
+      // The same public id rule as every contract endpoint.
+      id: publicProductId(r.contract_id, r.id),
       ean: r.ean,
       brand: r.brand,
       name: r.title,

@@ -3,15 +3,21 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Scoopt back end \u2014 ingestion, API and data quality. Prices come from eBay; Icecat enriches them.",
+  "description": "Scoopt back end — ingestion, API and data quality. Prices come from eBay; Icecat enriches them.",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "start": "tsx src/server.ts",
+    "start": "tsx src/contract-server.ts --use-host-port",
     "db:migrate": "node --env-file=.env scripts/migrate.mjs",
     "ingest": "tsx --env-file=.env src/ingest/run.ts",
-    "dev": "tsx watch --env-file=.env src/server.ts",
+    "ingest:railway": "tsx src/ingest/run.ts ebay-nl ebay-de",
+    "dev": "tsx watch --env-file=.env src/contract-server.ts",
     "test": "vitest run",
+    "test:env": "node --env-file=.env node_modules/vitest/vitest.mjs run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
+    "contract:check": "node scripts/contract-check.mjs",
     "ingest:list": "tsx --env-file=.env src/ingest/run.ts --list",
     "ingest:all": "tsx --env-file=.env src/ingest/run.ts all",
     "enrich:icecat": "tsx --env-file=.env src/ingest/enrich-icecat.ts",
@@ -27,11 +33,11 @@
   },
   "dependencies": {
     "postgres": "^3.4.5",
+    "tsx": "^4.23.12",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
-    "tsx": "^4.23.12",
     "typescript": "^5.7.3",
     "vitest": "^2.1.8"
   },

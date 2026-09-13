@@ -1,36 +1,64 @@
 # Scoopt back end — request collection
 # Install the VS Code extension "REST Client" (humao.rest-client), then click
 # the little "Send Request" link that appears above each request below.
-# Start the server first with: npm run dev
+# Start the server first with: npm run serve
 
-@host = http://localhost:3001
+@host = http://localhost:3002
 
-### health
+### health (cheap, public)
 GET {{host}}/health
 
-### search — happy path
-GET {{host}}/api/search?q=Kalenji
+### health details (needs HEALTH_TOKEN set in .env)
+GET {{host}}/health/details
+x-health-token: paste-your-HEALTH_TOKEN-here
 
-### search — too short, expect 400
-GET {{host}}/api/search?q=a
+### search — happy path
+GET {{host}}/api/search?q=running shoes
+
+### search — paged catalogue listing (empty query)
+GET {{host}}/api/search?limit=20&offset=0
+
+### search — bad limit, expect 400
+GET {{host}}/api/search?q=shoe&limit=abc
 
 ### search — no matches, expect 200 and []
 GET {{host}}/api/search?q=zzzznotathing
 
-### product — happy path
+### product — by numeric id or contract slug
 GET {{host}}/api/product/1
 
 ### product — missing, expect 404
 GET {{host}}/api/product/999999
 
-### product — rubbish id, expect 404 not 500
-GET {{host}}/api/product/abc
+### product — malformed encoding, expect 400
+GET {{host}}/api/product/%E0%A4%A
+
+### category page (subcategory tiles)
+GET {{host}}/api/category/sport
+
+### category tree
+GET {{host}}/api/categories
+
+### category products, paged
+GET {{host}}/api/categories/sport/running/products?limit=24&offset=0
 
 ### price history
 GET {{host}}/api/price-history/1
+
+### basket plan
+POST {{host}}/api/basket/plan
+Content-Type: application/json
+
+{ "items": ["1", "2"] }
+
+### basket compare
+POST {{host}}/api/basket/compare
+Content-Type: application/json
+
+{ "items": ["1", "2"] }
 
 ### track
 POST {{host}}/api/track
 Content-Type: application/json
 
-{ "event": "product_view", "productId": "1" }
+{ "type": "view_product", "productId": "1", "at": "2026-09-13T12:00:00Z" }

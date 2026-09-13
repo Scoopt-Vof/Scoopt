@@ -1,4 +1,4 @@
--- Scoopt back end — schema v3
+-- Scoopt back end — schema v5
 --
 -- Icecat enrichment (a separate pass, see src/ingest/enrich-icecat.ts) needs
 -- its own "last checked" timestamp per product. Without one, every run would

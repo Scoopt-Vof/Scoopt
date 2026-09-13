@@ -1,7 +1,7 @@
 // ⚠️  VERBATIM COPY of Josh's contract/types.ts, pulled from the front-end zip
 //     in Drive. DO NOT EDIT. Re-copy it whenever Josh changes the contract —
-//     `npm run contract:check` typechecks our output against this file, so a
-//     drift becomes a compile error here rather than a bug report from him.
+//     `npm run contract:check` compares this file with frontend/contract/types.ts
+//     and fails on any difference below this header.
 
 // ============================================================================
 //  SCOOPT — THE API CONTRACT
