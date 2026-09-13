@@ -170,23 +170,26 @@ with `CORS_ORIGINS` (default `http://localhost:3000`).
 
 ## Deploying (Railway)
 
-The back end runs on Railway as two services built from this repo, both with
-**Root Directory** set to `/backend`:
+The back end runs on Railway, configured in the dashboard (Railway's
+config-as-code files cannot be enabled for this project). Both services build
+from this repo with **Root Directory** `/backend`, **Railpack** builder, branch
+`main` (auto-deploy).
 
-| Service | Config file (Settings → Config-as-code) | What it does |
+| Service | Start command | Other settings |
 |---|---|---|
-| API | `/backend/railway.json` | `npm start` → `src/contract-server.ts` on Railway's `PORT`; health check `/health` |
-| Ingest (cron) | `/backend/railway.ingest.json` | `npm run ingest:railway` (eBay NL + DE) daily at 03:00 UTC, then exits |
+| API | `npx tsx src/contract-server.ts` (or `npm start`) | Healthcheck Path `/health`; restart On Failure; public domain → port 8080 |
+| Ingest (cron) | `npm run ingest:railway` (eBay NL + DE) | Cron Schedule `0 3 * * *`; restart Never |
 
 Environment variables are set per service in Railway (there is no `.env` file on
-Railway). See `.env.example` for the full list. At minimum:
+Railway). See `.env.example` for the full list.
 
-- **Both services:** `DATABASE_URL`, `HTTP_USER_AGENT`
-- **API:** optionally `HEALTH_TOKEN`, `CORS_ORIGINS`, `OFFER_MAX_AGE_HOURS`
-- **Ingest:** `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`, optionally `EPN_CAMPAIGN_ID`
+- **API:** `DATABASE_URL`, `CONTRACT_PORT=8080` (matches the domain's target
+  port); optionally `HEALTH_TOKEN`, `CORS_ORIGINS`, `OFFER_MAX_AGE_HOURS`
+- **Ingest:** `DATABASE_URL`, `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`,
+  `HTTP_USER_AGENT`; optionally `EPN_CAMPAIGN_ID`
 
 Order when a release includes migrations: run `npm run db:migrate` against the
-live database first, then deploy. Offers not refreshed within
+live database first, then merge to `main`. Offers not refreshed within
 `OFFER_MAX_AGE_HOURS` (default 48) are hidden, so the ingest cron must keep
 running for prices to stay visible.
 
