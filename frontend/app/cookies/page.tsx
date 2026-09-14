@@ -13,7 +13,7 @@ export default function CookiesPage() {
   return (
     <div className="legal">
       <h1 className="page-title">Cookie notice</h1>
-      <p className="legal-updated">Last updated: [DATE]</p>
+      <p className="legal-updated">Last updated: {new Date().toISOString().slice(0, 10)}</p>
 
       <p>
         Cookies are small files stored on your device. This page explains which
@@ -83,7 +83,8 @@ export default function CookiesPage() {
 
       <h2>Questions</h2>
       <p>
-        If anything here is unclear, email us at [CONTACT EMAIL] and we will
+        If anything here is unclear, email us at{" "}
+        <a href="mailto:hello@scoopt.nl">hello@scoopt.nl</a> and we will
         explain it properly.
       </p>
     </div>
