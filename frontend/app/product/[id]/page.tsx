@@ -4,6 +4,7 @@ import { fetchProduct } from "@/lib/api";
 import PriceLane from "@/components/PriceLane";
 import PriceSignal from "@/components/PriceSignal";
 import ForYou from "@/components/ForYou";
+import ProductSpecs from "@/components/ProductSpecs";
 import TrackView from "@/components/TrackView";
 import AddToBasket from "@/components/AddToBasket";
 
@@ -27,29 +28,41 @@ export default async function ProductPage({
         <b>{product.name}</b>
       </div>
 
-      <h1 className="page-title">{product.name}</h1>
-      <p className="page-blurb">
-        {product.brand} · {product.unit}
-      </p>
+      {/* Two columns on wide screens: image on the left, everything about the
+          product on the right (name, why it fits you, specs, add to basket).
+          The price comparison sits full width below. Stacks on mobile. */}
+      <div className="product-top">
+        <div className="product-media">
+          {product.image ? (
+            <img src={product.image} alt={product.name} className="product-image" />
+          ) : (
+            <div className="product-image product-image-empty" aria-hidden="true" />
+          )}
+        </div>
 
-      {product.image && (
-        // TODO: once the Icecat enrichment backend lands, the contract will
-        // need to say WHICH images came from Icecat so the required "Specs
-        // Icecat" + AS-IS attribution can be shown only for those, not for
-        // every image regardless of source.
-        <img
-          src={product.image}
-          alt={product.name}
-          className="page-hero-image"
-        />
-      )}
+        <div className="product-info">
+          <h1 className="page-title">{product.name}</h1>
+          <p className="page-blurb">
+            {product.brand} · {product.unit}
+          </p>
 
-      <ForYou product={product} />
+          {product.description && (
+            <p className="product-description">{product.description}</p>
+          )}
 
-      <p className="note">Price per store, cheapest first</p>
-      <PriceLane offers={offers} />
-      <PriceSignal productId={product.id} />
-      <AddToBasket productId={product.id} category={product.category} />
+          <ForYou product={product} />
+
+          <ProductSpecs specs={product.specs} />
+
+          <AddToBasket productId={product.id} category={product.category} />
+        </div>
+      </div>
+
+      <div className="product-prices">
+        <p className="note">Price per store, cheapest first</p>
+        <PriceLane offers={offers} />
+        <PriceSignal productId={product.id} />
+      </div>
     </>
   );
 }

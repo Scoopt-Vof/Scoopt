@@ -11,14 +11,8 @@ import { fetchProduct, fetchCategoryProducts } from "@/lib/api";
 import { getSubcategoryConfig } from "@/lib/subcategoryQuestions";
 import { CATEGORY_LABELS } from "@/lib/categories";
 import { SUBCATEGORIES } from "@/lib/subcategories";
+import ProfilePersonalise from "@/components/ProfilePersonalise";
 import type { ShopperProfile, PersonalisedProduct, Product, Account, Category } from "@/contract/types";
-
-// Progressive insight areas — Timing removed (not actionable yet); Sizing is
-// now collected per-subcategory via the intake forms rather than as one global field.
-const INSIGHT_AREAS = [
-  { key: "values", label: "What you value", unlocks: "We'll rank by durability or sustainability, not just price." },
-  { key: "lifeContext", label: "Life context", unlocks: "We'll show family-sized or rental-friendly picks that fit your life." },
-] as const;
 
 const CAT_LABELS = CATEGORY_LABELS;
 
@@ -159,7 +153,17 @@ export default function ProfilePage() {
               <div className="account-email">{account.email} · via {account.provider}</div>
             </div>
           </div>
-          <button className="btn-ghost account-signout" onClick={() => { signOut(); location.href = "/"; }}>
+          <button
+            className="btn-ghost account-signout"
+            onClick={async () => {
+              // Await sign-out so the Supabase session and all local scoopt.* data
+              // are actually cleared BEFORE we navigate. Previously navigation
+              // fired first and the clear never completed, so you landed on the
+              // home page still signed in.
+              await signOut();
+              location.href = "/";
+            }}
+          >
             Sign out
           </button>
         </div>
@@ -226,32 +230,8 @@ export default function ProfilePage() {
         })}
       </div>
 
-      {/* ── Global insight areas (values + life context) ───────────────────── */}
-      <h2 className="section-h" style={{ marginTop: 30 }}>Complete your profile</h2>
-      <p className="note" style={{ marginTop: -8 }}>
-        Add a little more and Scoopt can give you sharper, more honest buying help.
-      </p>
-      <div className="insight-grid">
-        {INSIGHT_AREAS.map((area) => {
-          const done = Boolean(
-            profile[area.key] &&
-            (Array.isArray(profile[area.key])
-              ? (profile[area.key] as string[]).length > 0
-              : Object.keys(profile[area.key] as object).length > 0)
-          );
-          return (
-            <div key={area.key} className={`insight-card ${done ? "done" : ""}`}>
-              <div className="insight-top">
-                <span className="insight-label">{area.label}</span>
-                {done
-                  ? <span className="insight-badge on">Added ✓</span>
-                  : <span className="insight-badge">Add</span>}
-              </div>
-              <p className="insight-unlocks">{area.unlocks}</p>
-            </div>
-          );
-        })}
-      </div>
+      {/* ── Editable insight areas + delivery details (items 5 and 6) ──────── */}
+      <ProfilePersonalise signedIn={Boolean(account)} />
 
       <h2 className="section-h" style={{ marginTop: 30 }}>Picked for you</h2>
       <div className="prod-grid">

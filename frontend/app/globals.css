@@ -526,3 +526,95 @@ a { color: inherit; text-decoration: none; }
 .lane-oos { opacity: 0.55; }
 .lane-oos-tag { font-size: 11px; font-weight: 700; color: var(--cta-ink); text-transform: uppercase; letter-spacing: 0.02em; }
 .lane-checked { font-size: 11px; font-weight: 500; color: var(--faint); }
+
+/* ── Product page: two-column layout (image left, details right) ─────────── */
+.product-top {
+  display: grid;
+  grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+  gap: 32px;
+  align-items: start;
+  margin: 8px 0 30px;
+}
+@media (max-width: 780px) {
+  .product-top { grid-template-columns: 1fr; gap: 18px; }
+}
+.product-media { position: sticky; top: 90px; }
+@media (max-width: 780px) { .product-media { position: static; } }
+.product-image {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 18px;
+}
+.product-image-empty { display: block; }
+.product-info { min-width: 0; }
+.product-description {
+  font-size: 15px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 12px 0 4px;
+}
+
+/* Specs table */
+.specs { margin-top: 22px; }
+.specs-title { font-size: 16px; margin-bottom: 10px; }
+.specs-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.specs-table tr { border-bottom: 1px solid var(--line); }
+.specs-table th {
+  text-align: left; font-weight: 600; color: var(--muted);
+  padding: 8px 14px 8px 0; vertical-align: top; width: 42%;
+}
+.specs-table td { padding: 8px 0; color: var(--ink); }
+.specs-source { font-size: 11.5px; color: var(--faint); margin-top: 10px; }
+
+.product-prices { margin-top: 8px; }
+
+/* Subcategory intake: saved-preferences banner + action buttons (item 2). */
+.intake-banner { margin-bottom: 18px; }
+.intake-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.intake-actions .btn-ghost { font-size: 13.5px; }
+
+/* Editable profile tiles + delivery details (items 5 and 6). */
+.insight-badge-btn {
+  font-size: 12px; font-weight: 700; color: var(--brand);
+  background: var(--brand-tint); border: none; border-radius: 999px;
+  padding: 4px 12px; cursor: pointer;
+}
+.insight-badge-btn:hover { background: var(--brand); color: #fff; }
+.editor { margin-top: 12px; }
+.editor-field { display: block; margin-bottom: 10px; }
+.editor-field .q-label { display: block; margin-bottom: 4px; }
+.editor-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 520px) { .editor-row { grid-template-columns: 1fr; } }
+.delivery-summary { font-style: normal; font-size: 14px; color: var(--ink); line-height: 1.7; margin-top: 10px; }
+
+/* ── Home page refresh (item 1) ──────────────────────────────────────────── */
+/* Category cards: add an icon and a clear "explore" affordance (these DO click). */
+.cat-card { display: flex; flex-direction: column; }
+.cat-icon { display: inline-flex; color: var(--brand); margin-bottom: 10px; }
+.cat-go { margin-top: 12px; font-size: 13px; font-weight: 700; color: var(--brand); }
+
+/* Tool tiles: soft coloured INFO panels, not raised buttons. No shadow, no
+   border, no hover-lift, so they read as "here's what we do", not "press me". */
+.tool-card {
+  background: var(--tint-bg, #f2f3f5);
+  border: none;
+  box-shadow: none;
+  border-radius: 16px;
+  padding: 20px;
+}
+.tool-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 11px;
+  background: #ffffff; color: var(--tint-fg, #333); margin-bottom: 12px;
+}
+.tool-card h4 { color: var(--ink); }
+.tool-card p { color: #5a5a52; }
+
+.tint-blue   { --tint-bg: #e8eeff; --tint-fg: #1240b8; }
+.tint-green  { --tint-bg: #e2f6ea; --tint-fg: #1f8f46; }
+.tint-orange { --tint-bg: #ffece2; --tint-fg: #b7370a; }
+.tint-purple { --tint-bg: #efe7fb; --tint-fg: #6b3fb0; }

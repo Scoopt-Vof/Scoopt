@@ -31,6 +31,11 @@ export interface Product {
   subcategory: string;        // e.g. "hardlopen"
   image: string;              // licensed (Icecat) or retailer-feed image URL
   specs?: Record<string, string>; // optional key/value specs
+  // Optional plain-language product description (e.g. from Icecat). The product
+  // page shows it when present. Additive: the backend can start sending it
+  // without the frontend changing (see findings A9 / G13 for the source +
+  // attribution the backend still needs to supply).
+  description?: string;
 }
 
 // ---------------------------------------------------------------------------

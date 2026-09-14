@@ -8,21 +8,34 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { loadProfile, personalise, SHOW_MATCH_PERCENT } from "@/lib/profile";
 import { getObservedSignals } from "@/lib/track";
-import type { Product, PersonalisedProduct } from "@/contract/types";
+import type { Product, PersonalisedProduct, ShopperProfile } from "@/contract/types";
 
-export default function PersonalisedGrid({ products }: { products: Product[] }) {
+export default function PersonalisedGrid({
+  products,
+  // Optional: rank against THIS profile instead of the signed-in shopper's saved
+  // one. Used by the "shopping for someone else" path so a one-off set of answers
+  // ranks the grid without touching the real profile. `null` means rank as a
+  // guest (no personalisation); omit entirely to use the saved profile.
+  profileOverride,
+}: {
+  products: Product[];
+  profileOverride?: ShopperProfile | null;
+}) {
   const [items, setItems] = useState<PersonalisedProduct[]>(
     products.map((product) => ({ product, matchScore: 50, reasons: [] }))
   );
   const [personalised, setPersonalised] = useState(false);
 
   useEffect(() => {
-    const profile = loadProfile();
+    const profile = profileOverride !== undefined ? profileOverride : loadProfile();
     if (profile) {
       setItems(personalise(products, profile, getObservedSignals()));
       setPersonalised(true);
+    } else {
+      setItems(products.map((product) => ({ product, matchScore: 50, reasons: [] })));
+      setPersonalised(false);
     }
-  }, [products]);
+  }, [products, profileOverride]);
 
   return (
     <>
