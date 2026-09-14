@@ -2,7 +2,7 @@
 
 Josh (with Claude) actioned the **front-end** findings from the code evaluation, then a second round of front-end fixes from walking the live site. All front-end changes are in `frontend/` only. Two small **backend** edits were also made on your behalf (flagged clearly below, both additive, both build clean) — review them before your next session rather than assuming they're done.
 
-This note has three parts: **Part 1** is the original evaluation-findings batch. **Part 2** is the batch from Josh's live-site walkthrough, plus the backend work. **Part 3** is a checkout flow added on top of Part 2's item 6 (delivery details).
+This note has four parts: **Part 1** is the original evaluation-findings batch. **Part 2** is the batch from Josh's live-site walkthrough, plus the backend work. **Part 3** is a checkout flow added on top of Part 2's item 6 (delivery details). **Part 4** is brand/type filtering for not-signed-in visitors on the category pages.
 
 ---
 
@@ -148,6 +148,25 @@ This fires wherever the shopper lands after tabbing back, not just on `/checkout
 
 ---
 
+# Part 4 — Brand/type filters on the category pages (new) — front-end only
+
+Josh's next ask: the three main category pages (`/category/sport`, `/category/home`, `/category/tech`) needed a way for a casual visitor who isn't signed in — so has no profile and never sees the questionnaire — to still narrow the product grid down themselves.
+
+## 17. `CategoryBrowse` — filter by brand and type
+
+New `frontend/components/CategoryBrowse.tsx`, dropped into `frontend/app/category/[cat]/page.tsx` in place of the plain product grid. It reads the category's own already-fetched product list (no new API calls) and adds:
+- A **Brand** dropdown, built from the distinct `product.brand` values actually present.
+- A **Type** row of chips, built from the distinct `product.subcategory` values present, labelled using the backend's own subcategory names where available.
+
+Both combine (AND) and apply client-side, instantly, with no sign-in and no contract change.
+
+## 18. "Add your own" type
+
+Next to the built-in type chips is a **"+ Add your own"** control. A shopper can type a label (e.g. "Winter gear") and it becomes a new filter chip, saved to that browser under `scoopt.customTypes.<category>.v1` so it's there again next visit, with an × to remove it. There's no real tagging system behind this — the site has no way to actually categorise a product beyond what the backend already gives it — so a custom type filters by a plain keyword match against the product's name, brand, unit, subcategory, specs and description. It's a personal, browser-local way to slice the grid, not a new piece of taxonomy, and it's worth being upfront with Josh (and anyone testing this) that it can turn up nothing if the keyword doesn't appear anywhere in a product's text.
+- **No backend or contract involvement.** If a real tagging/taxonomy system is ever wanted, this is a reasonable seam to replace with something backend-driven.
+
+---
+
 ## Quick checklist for your next session
 
 - [ ] Review the `description` field wiring in `contract-queries.ts` / `frontend-types.ts` (item 8).
@@ -156,6 +175,6 @@ This fires wherever the shopper lands after tabbing back, not just on `/checkout
 - [ ] Check MyIcecat's default content-language setting.
 - [ ] Mirror `observedDays` into your contract copy and return it from `GET /api/price-history/:id` (Part 1, item 1) — still outstanding.
 - [ ] KvK details for the privacy page placeholders, whenever convenient.
-- [ ] Nothing needed for Part 3 (checkout) — flagging it so it's not a surprise when you next pull `main`.
+- [ ] Nothing needed for Part 3 (checkout) or Part 4 (brand/type filters) — flagging both so neither is a surprise when you next pull `main`.
 
-Everything in Part 2 and Part 3 is front-end only (aside from the two flagged backend edits in item 8 and item 12) and needs nothing else from you to work.
+Everything in Parts 2–4 is front-end only (aside from the two flagged backend edits in item 8 and item 12) and needs nothing else from you to work.

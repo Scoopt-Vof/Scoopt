@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fetchCategory, fetchCategoryProducts } from "@/lib/api";
-import PersonalisedGrid from "@/components/PersonalisedGrid";
+import CategoryBrowse from "@/components/CategoryBrowse";
 
 // A Server Component that fetches data on the server before rendering.
 // `params` is a Promise in the current Next.js App Router — we await it.
@@ -50,7 +50,15 @@ export default async function CategoryPage({
               ? ` (showing ${products.length} of ${productPage.total})`
               : ""}
           </h2>
-          <PersonalisedGrid products={products} />
+          <p className="note" style={{ marginTop: -8, marginBottom: 14 }}>
+            Sign in and answer a few questions for picks tailored to you, or just filter by brand and type below —
+            no account needed.
+          </p>
+          <CategoryBrowse
+            category={page.category}
+            products={products}
+            subcategoryNames={Object.fromEntries(page.subcategories.map((s) => [s.id, s.name]))}
+          />
         </>
       )}
     </>
