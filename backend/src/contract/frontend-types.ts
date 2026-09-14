@@ -36,6 +36,10 @@ export interface Product {
   subcategory: string;        // e.g. "hardlopen"
   image: string;              // licensed (Icecat) or retailer-feed image URL
   specs?: Record<string, string>; // optional key/value specs
+  // Optional plain-language product description (from Icecat's data sheet).
+  // Stored on product.description and served here; the product page shows it
+  // when present. Kept in step with frontend/contract/types.ts.
+  description?: string;
 }
 
 // ---------------------------------------------------------------------------

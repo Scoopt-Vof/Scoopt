@@ -49,6 +49,7 @@ interface ProductRow {
   id: string; contract_id: string | null; ean: string; brand: string;
   title: string; unit: string | null; category: string; subcategory: string | null;
   image_url: string | null; specs: Record<string, string> | null;
+  description: string | null;
 }
 
 function toProduct(r: ProductRow): Product {
@@ -65,12 +66,15 @@ function toProduct(r: ProductRow): Product {
     subcategory: r.subcategory ?? r.category,
     image: r.image_url ?? '',
     specs: r.specs ?? {},
+    // Icecat's product description, stored on product.description. Omitted when
+    // absent (the contract field is optional), so it never sends an empty string.
+    description: r.description ?? undefined,
   };
 }
 
 const PRODUCT_COLS = sql`
   p.id, p.contract_id, p.ean, p.brand, p.title, p.unit,
-  p.category, p.subcategory, p.image_url, p.specs
+  p.category, p.subcategory, p.image_url, p.specs, p.description
 `;
 
 /** Published, and in a category the contract can represent. */
