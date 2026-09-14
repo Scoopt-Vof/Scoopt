@@ -30,6 +30,13 @@ import { fetchJson, requireEnv } from '../lib/http';
 
 const ICECAT_BASE = 'https://live.icecat.biz/api';
 
+// Language for Icecat content (descriptions, spec labels, category names). The
+// site is English, so default to English. Icecat's live API treats the language
+// code as upper-case (EN, NL, ...), so we normalise it — a lower-case value can
+// fall back to the account's default language, which is why descriptions were
+// coming back in Dutch. Override per market with ICECAT_LANG if ever needed.
+const ICECAT_LANG = (process.env.ICECAT_LANG ?? 'en').toUpperCase();
+
 export interface IcecatProduct {
     title: string | null;
     imageUrl: string | null;
@@ -83,7 +90,7 @@ export async function fetchIcecatProduct(gtin: string): Promise<IcecatProduct | 
         );
 
   const url =
-        `${ICECAT_BASE}?lang=en&shopname=${encodeURIComponent(username)}` +
+        `${ICECAT_BASE}?lang=${encodeURIComponent(ICECAT_LANG)}&shopname=${encodeURIComponent(username)}` +
         `&GTIN=${encodeURIComponent(gtin)}&content=essentialinfo,description,gallery,featuregroups`;
 
   let result;
