@@ -128,6 +128,14 @@ export default function BasketPage() {
             )}
           </div>
 
+          {result.recommended !== "none" && (
+            <div style={{ marginTop: 20 }}>
+              <Link href="/checkout" className="btn-cta">
+                Proceed to checkout →
+              </Link>
+            </div>
+          )}
+
           {/* Basket line items with remove — driven by the basket ids, NOT by the
               plan, so EVERY item can be removed: including one with no offers,
               one that is only available out of stock, and one the backend no

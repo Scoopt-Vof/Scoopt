@@ -3,6 +3,7 @@ import Link from "next/link";
 import BasketCount from "@/components/BasketCount";
 import SearchBox from "@/components/SearchBox";
 import AccountNav from "@/components/AccountNav";
+import CheckoutReturnWatcher from "@/components/CheckoutReturnWatcher";
 import { CATEGORIES } from "@/lib/categories";
 import "./globals.css";
 
@@ -16,6 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
+        <CheckoutReturnWatcher />
         <header className="site-header">
           <div className="header-inner">
             <Link href="/" className="logo">
@@ -35,6 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <footer className="site-footer">
         <Link href="/privacy">Privacy</Link>
         <Link href="/cookies">Cookies</Link>
+        <Link href="/terms">Terms</Link>
         <p className="footer-note">
           Scoopt earns a commission when you buy through us, at no extra cost to
           you. It never affects what we recommend or how we rank offers.

@@ -2,7 +2,7 @@
 
 Josh (with Claude) actioned the **front-end** findings from the code evaluation, then a second round of front-end fixes from walking the live site. All front-end changes are in `frontend/` only. Two small **backend** edits were also made on your behalf (flagged clearly below, both additive, both build clean) — review them before your next session rather than assuming they're done.
 
-This note has two parts: **Part 1** is the original evaluation-findings batch (unchanged from earlier today). **Part 2** is the new batch from Josh's live-site walkthrough, plus the backend work.
+This note has three parts: **Part 1** is the original evaluation-findings batch. **Part 2** is the batch from Josh's live-site walkthrough, plus the backend work. **Part 3** is a checkout flow added on top of Part 2's item 6 (delivery details).
 
 ---
 
@@ -116,6 +116,38 @@ const ICECAT_LANG = (process.env.ICECAT_LANG ?? 'en').toUpperCase();
 
 ---
 
+# Part 3 — Checkout flow (new) — front-end only, no backend or contract change
+
+Josh's last ask this session: a checkout page after the basket, that "recognises" the shopper coming back from a retailer's checkout. Same underlying reality as Part 2 item 6: eBay's (or any retailer's) checkout runs on their own domain, so there is no webhook, redirect-back, or API that hands Scoopt a real "order complete" signal. So this is built as **self-reported recognition**: notice the shopper leaving, notice them coming back, ask them directly. Josh confirmed this approach explicitly before I built it.
+
+## 13. New `/checkout` page
+
+`frontend/app/checkout/page.tsx`: reuses the exact same `planBasket()` result the basket page already computes, and groups the recommended plan's lines by store. For each store it shows the items, the store subtotal, and a **"Proceed to checkout at `<store>`"** button. It also shows a read-only summary of the shopper's saved delivery details (Part 2 item 11) with a link back to `/profile` to edit them, and a plain note that each store will still ask for the address itself. The basket page (`frontend/app/basket/page.tsx`) now has a "Proceed to checkout →" button leading here.
+
+## 14. `startCheckout()` — leaving for the retailer
+
+New `frontend/lib/checkout.ts`. Clicking "Proceed to checkout at `<store>`" opens each item's existing affiliate `Offer.url` in its own new tab (there is no "add all to one cart" link a comparison site can call — each offer is its own product page on the retailer), and writes a small "pending checkout" record to `localStorage` (`scoopt.checkout.pending.v1`: store, item ids/names, total, a timestamp). No network call, no contract change — this only reads offer data the basket page already has.
+
+## 15. `CheckoutReturnWatcher` — recognising the return
+
+New `frontend/components/CheckoutReturnWatcher.tsx`, mounted once, site-wide, in `frontend/app/layout.tsx`. It listens for the browser tab regaining focus/visibility. If a pending checkout exists and at least ~4 seconds have passed since it started (so an instant re-click doesn't falsely trigger it), it shows a modal: **"Did you complete your order at `<store>`?"** — with the caveat sentence spelled out to the shopper that Scoopt can't actually see what happened on the retailer's site.
+- **Yes** → files an order (`scoopt.orders.v1`, capped at 30) and removes those items from the basket.
+- **No / not yet** → clears the pending flag, basket is left exactly as it was.
+
+This fires wherever the shopper lands after tabbing back, not just on `/checkout`, since they may return to a different tab/page.
+
+## 16. Order history on the profile page
+
+`frontend/app/profile/page.tsx` gained a "Recent orders" section (only shown once at least one order exists) listing store, items, total and a relative time, sourced from `readOrders()` in the new `lib/checkout.ts`. It's labelled plainly as self-reported, for the same reason as above.
+
+## What this is and isn't
+
+- It's a real, working "did you check out?" loop that a shopper can use today, and it correctly clears items out of the basket once they say yes.
+- It is **not** or does not: submit an order anywhere, pass the delivery details to the retailer, receive any confirmation from the retailer, or persist orders anywhere but that one browser's `localStorage` (an order made on one device won't show up on another, and — like the rest of `scoopt.*` — it's wiped on sign-out, same as the basket and delivery details today).
+- **No backend or contract involvement at all.** If you later want real order confirmation (via an affiliate network's postback, or Scoopt's own checkout), this module (`lib/checkout.ts`) is the seam to swap out — the shopper-facing shape stays the same, only what backs "confirmed" changes.
+
+---
+
 ## Quick checklist for your next session
 
 - [ ] Review the `description` field wiring in `contract-queries.ts` / `frontend-types.ts` (item 8).
@@ -124,5 +156,6 @@ const ICECAT_LANG = (process.env.ICECAT_LANG ?? 'en').toUpperCase();
 - [ ] Check MyIcecat's default content-language setting.
 - [ ] Mirror `observedDays` into your contract copy and return it from `GET /api/price-history/:id` (Part 1, item 1) — still outstanding.
 - [ ] KvK details for the privacy page placeholders, whenever convenient.
+- [ ] Nothing needed for Part 3 (checkout) — flagging it so it's not a surprise when you next pull `main`.
 
-Everything else in Part 2 is front-end only and needs nothing from you to work.
+Everything in Part 2 and Part 3 is front-end only (aside from the two flagged backend edits in item 8 and item 12) and needs nothing else from you to work.

@@ -11,6 +11,8 @@ import { fetchProduct, fetchCategoryProducts } from "@/lib/api";
 import { getSubcategoryConfig } from "@/lib/subcategoryQuestions";
 import { CATEGORY_LABELS } from "@/lib/categories";
 import { SUBCATEGORIES } from "@/lib/subcategories";
+import { readOrders, type Order } from "@/lib/checkout";
+import { formatEuro, timeAgo } from "@/lib/format";
 import ProfilePersonalise from "@/components/ProfilePersonalise";
 import type { ShopperProfile, PersonalisedProduct, Product, Account, Category } from "@/contract/types";
 
@@ -59,12 +61,14 @@ export default function ProfilePage() {
   const [account, setAccount] = useState<Account | null>(null);
   const [picks, setPicks] = useState<PersonalisedProduct[]>([]);
   const [viewed, setViewed] = useState<Product[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const p = loadProfile();
     setProfile(p);
     setAccount(currentAccount());
+    setOrders(readOrders());
     const signals = getObservedSignals();
 
     async function load() {
@@ -232,6 +236,30 @@ export default function ProfilePage() {
 
       {/* ── Editable insight areas + delivery details (items 5 and 6) ──────── */}
       <ProfilePersonalise signedIn={Boolean(account)} />
+
+      {orders.length > 0 && (
+        <>
+          <h2 className="section-h" style={{ marginTop: 30 }}>Recent orders</h2>
+          <p className="note" style={{ marginTop: -8, marginBottom: 14 }}>
+            Self-reported at checkout — Scoopt can&apos;t see what happens on a store&apos;s own checkout, so these
+            reflect what you told us.
+          </p>
+          <div className="order-list">
+            {orders.map((o) => (
+              <div key={o.id} className="order-row">
+                <div className="order-row-main">
+                  <span className="order-store">{o.store}</span>
+                  <span className="order-items">
+                    {o.productNames.length === 1 ? o.productNames[0] : `${o.productNames.length} items`}
+                  </span>
+                </div>
+                <span className="order-total">{formatEuro(o.total)}</span>
+                <span className="order-when">{timeAgo(o.completedAt)}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       <h2 className="section-h" style={{ marginTop: 30 }}>Picked for you</h2>
       <div className="prod-grid">
