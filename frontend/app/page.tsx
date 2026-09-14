@@ -107,7 +107,7 @@ export default function HomePage() {
         <h2 className="section-h">Get in touch</h2>
         <p>
           Questions, feedback, or a partnership idea? Email us at{" "}
-          <a href="mailto:hello@scoopt.com">hello@scoopt.com</a> and we’ll get back to you.
+          <a href="mailto:hello@scoopt.nl">hello@scoopt.nl</a> and we’ll get back to you.
         </p>
       </section>
     </>

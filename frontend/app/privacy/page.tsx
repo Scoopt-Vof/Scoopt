@@ -1,8 +1,10 @@
 // Privacy notice. Plain page, no interactivity, so it stays a server component.
 //
-// IMPORTANT: the bracketed placeholders must be filled in before this goes in
-// front of real users. They need the KvK number and the registered address,
-// which exist only after the KvK appointment.
+// "Who we are" is deliberately generic: Scoopt is not yet registered with the
+// KvK (see /people or ask Josh/Larry for the latest), so this notice does NOT
+// claim a formal entity, a KvK number or a registered office it doesn't have.
+// Once registration completes, update this section with the real details —
+// don't just paste in a KvK number without updating the surrounding wording.
 
 export const metadata = {
   title: "Privacy notice · Scoopt",
@@ -13,7 +15,7 @@ export default function PrivacyPage() {
   return (
     <div className="legal">
       <h1 className="page-title">Privacy notice</h1>
-      <p className="legal-updated">Last updated: [DATE]</p>
+      <p className="legal-updated">Last updated: {new Date().toISOString().slice(0, 10)}</p>
 
       <p>
         This notice explains what personal data Scoopt collects, why we collect it,
@@ -23,10 +25,13 @@ export default function PrivacyPage() {
 
       <h2>Who we are</h2>
       <p>
-        Scoopt is operated by Scoopt VOF, a general partnership registered in the
-        Netherlands, Chamber of Commerce number [KVK NUMBER], registered office
-        [REGISTERED ADDRESS]. We are the controller of the personal data described
-        in this notice. You can reach us at [CONTACT EMAIL].
+        Scoopt is a shopping platform covering three categories &mdash; Sport, Home
+        &amp; Furniture, and Technology &mdash; run by its founders from Amsterdam,
+        the Netherlands. We are the controller of the personal data described in
+        this notice, and you can reach us at{" "}
+        <a href="mailto:hello@scoopt.nl">hello@scoopt.nl</a>. Scoopt is not yet
+        registered with the Dutch Chamber of Commerce (KvK); we will update this
+        section with our registration details once that is complete.
       </p>
 
       <h2>What we collect</h2>
@@ -120,7 +125,8 @@ export default function PrivacyPage() {
         <li>ask us to transfer your data to another service.</li>
       </ul>
       <p>
-        To exercise any of these, email us at [CONTACT EMAIL]. If you are not happy
+        To exercise any of these, email us at{" "}
+        <a href="mailto:hello@scoopt.nl">hello@scoopt.nl</a>. If you are not happy
         with how we handle your request, you can complain to the Dutch data
         protection authority, the Autoriteit Persoonsgegevens.
       </p>

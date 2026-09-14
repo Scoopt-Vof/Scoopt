@@ -12,11 +12,19 @@ export default function TermsPage() {
 
       <h2>1. What Scoopt is</h2>
       <p>
-        Scoopt helps you compare prices for products across multiple retailers,
-        and gives you personalised buying advice based on what you tell us and
-        how you use the site. Scoopt does not sell products itself — when you
-        click through to a retailer, you are buying from that retailer under
-        their own terms, not ours.
+        Scoopt is a shopping platform covering three categories — Sport, Home
+        &amp; Furniture, and Technology. Rather than a simple price list,
+        Scoopt builds a personal shopping profile from a short set of
+        questions, then ranks products against it with a plain-English reason
+        for each recommendation. Its Smart Basket also works out whether
+        buying everything at one retailer or splitting an order across
+        several actually works out cheaper once delivery is included, and
+        says which — honestly, even when splitting isn&apos;t worth it.
+      </p>
+      <p>
+        Scoopt does not sell products itself — when you click through to a
+        retailer, you are buying from that retailer under their own terms,
+        not ours.
       </p>
 
       <h2>2. Accounts</h2>
