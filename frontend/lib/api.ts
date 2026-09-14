@@ -12,31 +12,50 @@ import type {
   ShopperProfile, ObservedSignals,
 } from "@/contract/types";
 
-// Where the frontend looks for its API.
-//   • In the browser, a relative path ("") works fine.
-//   • On the SERVER (e.g. the product page rendering), fetch needs an ABSOLUTE
-//     URL, so we fall back to localhost:3000 in dev.
-//   • To point at Larry's real backend later, set NEXT_PUBLIC_API_BASE in a
-//     .env.local file (e.g. http://localhost:4000) and it takes over.
+// Where the frontend looks for its API. One rule, so dev and production behave
+// the same and the backend's address is never shipped to the browser:
+//   • In the BROWSER we always call the relative "/api/..." path, which hits the
+//     Next.js proxy routes (app/api/*), and the proxy forwards to BACKEND_URL.
+//   • On the SERVER (product, search, category pages render server-side) fetch
+//     needs an absolute URL, so we call the backend directly via BACKEND_URL —
+//     the same paths the proxy forwards to. BACKEND_URL has no NEXT_PUBLIC_
+//     prefix, so it is only ever readable here on the server, never in the
+//     browser bundle.
+// Set BACKEND_URL in frontend/.env.local for dev (http://localhost:3002) and in
+// the Vercel project's Environment Variables for production. See .env.example.
 const base =
-  process.env.NEXT_PUBLIC_API_BASE ??
-  (typeof window === "undefined" ? "http://localhost:3000" : "");
+  typeof window === "undefined"
+    ? (process.env.BACKEND_URL?.replace(/\/$/, "") ?? "")
+    : "";
+
+// A server render with no BACKEND_URL set would otherwise try to fetch a
+// relative URL (no host) and throw an opaque parse error. Fail loudly and
+// clearly instead — app/error.tsx turns this into a friendly page.
+function resolve(path: string): string {
+  if (typeof window === "undefined" && !base) {
+    throw new Error(
+      "BACKEND_URL is not set — the server cannot reach the backend. " +
+      "Set it in the environment (see frontend/.env.example)."
+    );
+  }
+  return `${base}${path}`;
+}
 
 export async function fetchProduct(id: string): Promise<ProductWithOffers | null> {
-  const res = await fetch(`${base}/api/product/${id}`, { cache: "no-store" });
+  const res = await fetch(resolve(`/api/product/${id}`), { cache: "no-store" });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`fetchProduct failed: ${res.status}`);
   return res.json();
 }
 
 export async function searchProducts(q: string): Promise<Product[]> {
-  const res = await fetch(`${base}/api/search?q=${encodeURIComponent(q)}`, { cache: "no-store" });
+  const res = await fetch(resolve(`/api/search?q=${encodeURIComponent(q)}`), { cache: "no-store" });
   if (!res.ok) throw new Error(`searchProducts failed: ${res.status}`);
   return res.json();
 }
 
 export async function fetchCategory(cat: string): Promise<CategoryPage | null> {
-  const res = await fetch(`${base}/api/category/${cat}`, { cache: "no-store" });
+  const res = await fetch(resolve(`/api/category/${cat}`), { cache: "no-store" });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`fetchCategory failed: ${res.status}`);
   return res.json();
@@ -68,7 +87,7 @@ export async function fetchCategoryProducts(
   if (opts.tags?.length) qs.set("tags", opts.tags.join(","));
   const query = qs.toString() ? `?${qs}` : "";
 
-  const res = await fetch(`${base}/api/categories/${path}/products${query}`, {
+  const res = await fetch(resolve(`/api/categories/${path}/products${query}`), {
     cache: "no-store",
   });
   if (res.status === 404) return null;
@@ -81,7 +100,7 @@ export async function fetchCategoryProducts(
 
 export async function compareBasket(items: string[]): Promise<BasketResult> {
   const body: BasketRequest = { items };
-  const res = await fetch(`${base}/api/basket/compare`, {
+  const res = await fetch(resolve(`/api/basket/compare`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -100,7 +119,7 @@ export interface BasketPlanData {
 
 export async function fetchBasketPlanData(items: string[]): Promise<BasketPlanData> {
   const body: BasketRequest = { items };
-  const res = await fetch(`${base}/api/basket/plan`, {
+  const res = await fetch(resolve(`/api/basket/plan`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -112,7 +131,7 @@ export async function fetchBasketPlanData(items: string[]): Promise<BasketPlanDa
 
 // Price history for a product — powers "cheapest in 30 days" honest signals.
 export async function fetchPriceHistory(id: string): Promise<PriceHistory | null> {
-  const res = await fetch(`${base}/api/price-history/${id}`, { cache: "no-store" });
+  const res = await fetch(resolve(`/api/price-history/${id}`), { cache: "no-store" });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`fetchPriceHistory failed: ${res.status}`);
   return res.json();
@@ -127,7 +146,7 @@ export async function personaliseServer(
   observed?: ObservedSignals | null
 ): Promise<PersonalisedProduct[]> {
   const body: PersonaliseRequest = { productIds, profile, observed };
-  const res = await fetch(`${base}/api/personalise`, {
+  const res = await fetch(resolve(`/api/personalise`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

@@ -6,7 +6,7 @@ import type { PersonaliseRequest } from "@/contract/types";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
-  const body = (await req.json()) as PersonaliseRequest;
+  const body = (await req.json().catch(() => null)) as PersonaliseRequest | null;
   if (!body?.productIds || !Array.isArray(body.productIds)) {
     return NextResponse.json({ error: "Body must be a PersonaliseRequest" }, { status: 400 });
   }

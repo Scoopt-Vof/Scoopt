@@ -19,12 +19,48 @@ import { supabase } from "@/lib/supabaseClient";
 const KEY = "scoopt.profile.v1";
 const TABLE = "shopper_profile";
 
+// The numeric "match %" is HIDDEN for now. The score depends on product
+// attributes (budget tier, quality, release year, level) that no backend source
+// sets yet (see finding G6), so almost every product lands at ~50-55% with the
+// generic reason "Chosen for price" — a precise-looking number that tells the
+// shopper nothing and makes the core USP look broken. Ranking order and the
+// plain-language "why it fits" reasons are still shown; only the percentage is
+// hidden. Flip this to true once the backend supplies real attributes.
+export const SHOW_MATCH_PERCENT = false;
+
+// One-time migration for profiles saved before the running questionnaire was
+// aligned (F5). Older profiles stored running answers under the Dutch key
+// "hardlopen" and used niveau value "advanced"; the app now uses "running" and
+// "gevorderd". Returns whether anything changed so the caller can persist it.
+function migrateRunningDetail(p: ShopperProfile): boolean {
+  let changed = false;
+  const detail = p.detail ?? {};
+  const legacy = detail["hardlopen"];
+  if (legacy && !detail["running"]) {
+    detail["running"] = { ...legacy };
+    delete detail["hardlopen"];
+    changed = true;
+  }
+  const running = detail["running"];
+  if (running && running.niveau === "advanced") {
+    running.niveau = "gevorderd";
+    changed = true;
+  }
+  if (changed) p.detail = detail;
+  return changed;
+}
+
 // ---- storage (browser only, same-device fast path) --------------------------
 export function loadProfile(): ShopperProfile | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as ShopperProfile) : null;
+    if (!raw) return null;
+    const profile = JSON.parse(raw) as ShopperProfile;
+    // Migrate in place and, if anything changed, write it back (which also
+    // mirrors the corrected profile to Supabase for signed-in shoppers).
+    if (migrateRunningDetail(profile)) saveProfile(profile);
+    return profile;
   } catch {
     return null;
   }

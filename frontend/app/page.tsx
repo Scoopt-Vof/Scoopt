@@ -1,12 +1,8 @@
 import Link from "next/link";
+import { CATEGORIES } from "@/lib/categories";
 
 // The home page is a Server Component (the default in Next's App Router).
 // It renders on the server, which is exactly what we want for SEO.
-const CATEGORIES = [
-  { id: "home", name: "Home & furniture", blurb: "Furnish every room and compare the same sofa or bed frame across every store." },
-  { id: "sport", name: "Sport", blurb: "Find the right gear for the sport you actually do, from your first running shoes to a home gym." },
-  { id: "tech", name: "Technology", blurb: "See what a laptop or phone really costs across every major store." },
-];
 
 const TOOLS = [
   {
@@ -47,7 +43,7 @@ export default function HomePage() {
       <div className="cat-cards">
         {CATEGORIES.map((c) => (
           <Link key={c.id} href={`/category/${c.id}`} className="cat-card">
-            <h3>{c.name}</h3>
+            <h3>{c.label}</h3>
             <p>{c.blurb}</p>
           </Link>
         ))}

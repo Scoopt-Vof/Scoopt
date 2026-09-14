@@ -34,6 +34,12 @@ export default function SearchBox() {
           setResults(r.slice(0, 6));
           setActive(-1);
         })
+        .catch(() => {
+          // Backend down or a bad response: show no matches rather than leaving
+          // an unhandled promise rejection in the console.
+          setResults([]);
+          setActive(-1);
+        })
         .finally(() => setLoading(false));
     }, 250);
     return () => clearTimeout(t);

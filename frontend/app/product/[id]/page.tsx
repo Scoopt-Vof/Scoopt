@@ -46,7 +46,7 @@ export default async function ProductPage({
 
       <ForYou product={product} />
 
-      <p className="note">Price per store, cheapest first · sample data</p>
+      <p className="note">Price per store, cheapest first</p>
       <PriceLane offers={offers} />
       <PriceSignal productId={product.id} />
       <AddToBasket productId={product.id} category={product.category} />

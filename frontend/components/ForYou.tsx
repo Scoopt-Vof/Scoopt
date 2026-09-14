@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { loadProfile, personalise } from "@/lib/profile";
+import { loadProfile, personalise, SHOW_MATCH_PERCENT } from "@/lib/profile";
 import { getObservedSignals } from "@/lib/track";
 import type { Product, PersonalisedProduct } from "@/contract/types";
 
@@ -40,7 +40,9 @@ export default function ForYou({ product }: { product: Product }) {
     <div className="foryou">
       <div className="foryou-head">
         <span className="foryou-eyebrow">For you</span>
-        <span className="foryou-score">{result.matchScore}% match</span>
+        {SHOW_MATCH_PERCENT && (
+          <span className="foryou-score">{result.matchScore}% match</span>
+        )}
       </div>
       {result.reasons.length > 0 ? (
         <ul className="reasons">

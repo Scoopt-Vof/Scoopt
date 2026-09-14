@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { signInWithEmail, signUpWithEmail, subscribe } from "@/lib/auth";
 import { loadProfileAsync } from "@/lib/profile";
+import { isSupabaseConfigured } from "@/lib/supabaseClient";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -91,6 +92,26 @@ export default function AccountPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  // If the Supabase keys aren't configured (see lib/supabaseClient.ts), the rest
+  // of the site works but accounts can't. Say so plainly rather than letting the
+  // form fail on submit.
+  if (!isSupabaseConfigured) {
+    return (
+      <div className="auth-wrap">
+        <div className="auth-card">
+          <h1 className="auth-title">Accounts are temporarily unavailable</h1>
+          <p className="auth-sub">
+            You can still browse products, compare prices and use the smart basket
+            as a guest. Signing in will be back shortly.
+          </p>
+          <p className="auth-guest">
+            <Link href="/" className="auth-link">Keep browsing as a guest</Link>
+          </p>
+        </div>
+      </div>
+    );
   }
 
   if (pendingConfirmation) {
@@ -180,8 +201,8 @@ export default function AccountPage() {
       </div>
 
       <p className="auth-privacy">
-        Your data is yours. We use it to give you better buying advice — never sold
-        as your identity. You can view or delete it any time.
+        Your data is yours. We use it to give you better buying advice, never sold
+        as your identity. You can clear your profile any time from the profile page.
       </p>
     </div>
   );

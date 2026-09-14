@@ -2,6 +2,7 @@
 /.next
 /out
 .env*
+!.env.example
 .DS_Store
 *.log
 *.tsbuildinfo

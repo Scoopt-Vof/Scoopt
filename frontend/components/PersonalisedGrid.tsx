@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { loadProfile, personalise } from "@/lib/profile";
+import { loadProfile, personalise, SHOW_MATCH_PERCENT } from "@/lib/profile";
 import { getObservedSignals } from "@/lib/track";
 import type { Product, PersonalisedProduct } from "@/contract/types";
 
@@ -44,7 +44,9 @@ export default function PersonalisedGrid({ products }: { products: Product[] }) 
             <span className="prod-unit">{product.unit}</span>
             {personalised && (
               <>
-                <div className="match"><span className="match-score">{matchScore}% match</span></div>
+                {SHOW_MATCH_PERCENT && (
+                  <div className="match"><span className="match-score">{matchScore}% match</span></div>
+                )}
                 {reasons.length > 0 && (
                   <ul className="reasons">
                     {reasons.map((r) => <li key={r}>{r}</li>)}

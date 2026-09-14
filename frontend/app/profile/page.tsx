@@ -4,11 +4,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { loadProfile, clearProfile, personalise } from "@/lib/profile";
+import { loadProfile, clearProfile, personalise, SHOW_MATCH_PERCENT } from "@/lib/profile";
 import { getObservedSignals, recentlyViewed, clearEvents } from "@/lib/track";
 import { currentAccount, signOut } from "@/lib/auth";
-import { searchProducts } from "@/lib/api";
+import { fetchProduct, fetchCategoryProducts } from "@/lib/api";
 import { getSubcategoryConfig } from "@/lib/subcategoryQuestions";
+import { CATEGORY_LABELS } from "@/lib/categories";
+import { SUBCATEGORIES } from "@/lib/subcategories";
 import type { ShopperProfile, PersonalisedProduct, Product, Account, Category } from "@/contract/types";
 
 // Progressive insight areas — Timing removed (not actionable yet); Sizing is
@@ -18,30 +20,12 @@ const INSIGHT_AREAS = [
   { key: "lifeContext", label: "Life context", unlocks: "We'll show family-sized or rental-friendly picks that fit your life." },
 ] as const;
 
-const CAT_LABELS: Record<Category, string> = {
-  sport: "Sport",
-  home: "Home & furniture",
-  tech: "Technology",
-};
+const CAT_LABELS = CATEGORY_LABELS;
 
 // Subcategories shown under each category on the profile page. Each links to
-// the existing subcategory page where SubcategoryIntake handles the form.
-const CATEGORY_SUBCATEGORIES: Record<Category, { id: string; name: string }[]> = {
-  sport: [
-    { id: "running", name: "Running" },
-    { id: "cycling", name: "Cycling" },
-    { id: "fitness-gym", name: "Fitness & gym" },
-  ],
-  home: [
-    { id: "furniture", name: "Living room" },
-    { id: "bedroom", name: "Bedroom" },
-    { id: "kitchen-dining", name: "Kitchen & dining" },
-  ],
-  tech: [
-    { id: "laptops-computers", name: "Laptops & computers" },
-    { id: "smartphones", name: "Smartphones" },
-  ],
-};
+// the subcategory page where SubcategoryIntake handles the form. Shared with
+// that page (lib/subcategories.ts) so the two never disagree.
+const CATEGORY_SUBCATEGORIES = SUBCATEGORIES;
 
 // The sign-up questionnaire wrote running answers to "hardlopen" (Dutch); the
 // subcategory intake form uses the canonical English id "running". Check both
@@ -88,19 +72,42 @@ export default function ProfilePage() {
     setProfile(p);
     setAccount(currentAccount());
     const signals = getObservedSignals();
-    searchProducts("").then((all) => {
-      if (p) {
-        const relevant = all.filter((x) => p.categories.includes(x.category));
-        setPicks(personalise(relevant.length ? relevant : all, p, signals).slice(0, 4));
+
+    async function load() {
+      try {
+        // Picks: candidates come from the shopper's chosen categories via the
+        // paged category endpoint — not searchProducts(""), which only ever
+        // returned the 200 oldest products in the whole catalogue.
+        if (p && p.categories.length > 0) {
+          const pages = await Promise.all(
+            p.categories.map((c) => fetchCategoryProducts(c, { limit: 24 }))
+          );
+          const candidates: Product[] = pages.flatMap((pg) => pg?.products ?? []);
+          if (candidates.length > 0) {
+            setPicks(personalise(candidates, p, signals).slice(0, 4));
+          }
+        }
+
+        // Recently viewed: resolve the handful of ids we actually have by id,
+        // rather than scanning the whole catalogue. (A batch endpoint, G12,
+        // would let us do this in one request.)
+        const recentIds = recentlyViewed(6);
+        const resolved = await Promise.all(
+          recentIds.map((id) => fetchProduct(id).catch(() => null))
+        );
+        setViewed(
+          resolved
+            .map((r) => r?.product)
+            .filter((x): x is Product => Boolean(x))
+        );
+      } finally {
+        // Always leave the loading state, even if the backend is down, so the
+        // page renders instead of showing "Loading…" forever.
+        setReady(true);
       }
-      const recentIds = recentlyViewed(6);
-      setViewed(
-        recentIds
-          .map((id) => all.find((x) => x.id === id))
-          .filter((x): x is Product => Boolean(x))
-      );
-      setReady(true);
-    });
+    }
+
+    load();
   }, []);
 
   if (!ready) return <p className="note">Loading…</p>;
@@ -253,9 +260,11 @@ export default function ProfilePage() {
             <span className="prod-brand">{product.brand}</span>
             <span className="prod-name">{product.name}</span>
             <span className="prod-unit">{product.unit}</span>
-            <div className="match">
-              <span className="match-score">{matchScore}% match</span>
-            </div>
+            {SHOW_MATCH_PERCENT && (
+              <div className="match">
+                <span className="match-score">{matchScore}% match</span>
+              </div>
+            )}
             {reasons.length > 0 && (
               <ul className="reasons">
                 {reasons.map((r) => <li key={r}>{r}</li>)}

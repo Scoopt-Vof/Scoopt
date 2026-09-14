@@ -9,12 +9,11 @@ import { saveProfile } from "@/lib/profile";
 import type {
   Category, BudgetBand, Priority, ShopperProfile, CategoryDetail,
 } from "@/contract/types";
+import { CATEGORIES } from "@/lib/categories";
 
-const CATS: { id: Category; label: string }[] = [
-  { id: "home", label: "Home & furniture" },
-  { id: "sport", label: "Sport" },
-  { id: "tech", label: "Technology" },
-];
+const CATS: { id: Category; label: string }[] = CATEGORIES.map(
+  ({ id, label }) => ({ id, label })
+);
 const BUDGETS: { id: BudgetBand; label: string; hint: string }[] = [
   { id: "value", label: "Value", hint: "Best price matters most" },
   { id: "mid", label: "Mid-range", hint: "Price and quality" },
@@ -49,10 +48,16 @@ export default function SignupPage() {
 
   function finish() {
     const detail: Record<string, CategoryDetail> = {};
+    // Write under the canonical English subcategory id "running" (the id the
+    // backend sends and the ranking engine looks up), with the SAME field ids
+    // and option values the subcategory intake form uses ("afstand"/"niveau",
+    // niveau: "beginner"|"gevorderd"). Previously this wrote "hardlopen" with
+    // niveau "advanced", so the answers were never found by scoreProduct and
+    // disagreed with the intake form.
     if (shopsSport && (runDistance || runLevel)) {
-      detail["hardlopen"] = {};
-      if (runDistance) detail["hardlopen"].afstand = runDistance;
-      if (runLevel) detail["hardlopen"].niveau = runLevel;
+      detail["running"] = {};
+      if (runDistance) detail["running"].afstand = runDistance;
+      if (runLevel) detail["running"].niveau = runLevel;
     }
     const profile: ShopperProfile = {
       name: name.trim() || undefined,
@@ -148,17 +153,22 @@ export default function SignupPage() {
         <section className="quiz-card">
           <h1>A little more about running</h1>
           <p className="quiz-sub">So we can tailor shoes and watches to you.</p>
-          <label className="q-label">How much do you run per week?</label>
+          <label className="q-label">What are you training for?</label>
           <div className="opt-grid">
-            {["0-10km", "10-25km", "25km+"].map((d) => (
-              <button key={d} type="button"
-                className={`opt ${runDistance === d ? "on" : ""}`}
-                onClick={() => setRunDistance(d)}>{d}</button>
+            {[
+              ["5-10km", "5–10 km"],
+              ["10-25km", "10–25 km"],
+              ["marathon", "Marathon or beyond"],
+              ["general", "Just staying fit"],
+            ].map(([v, l]) => (
+              <button key={v} type="button"
+                className={`opt ${runDistance === v ? "on" : ""}`}
+                onClick={() => setRunDistance(v)}>{l}</button>
             ))}
           </div>
           <label className="q-label" style={{ marginTop: 16 }}>Your level?</label>
           <div className="opt-grid">
-            {[["beginner", "Beginner"], ["advanced", "Advanced"]].map(([v, l]) => (
+            {[["beginner", "Beginner"], ["gevorderd", "Advanced"]].map(([v, l]) => (
               <button key={v} type="button"
                 className={`opt ${runLevel === v ? "on" : ""}`}
                 onClick={() => setRunLevel(v)}>{l}</button>

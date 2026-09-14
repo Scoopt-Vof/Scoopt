@@ -2,11 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fetchCategory } from "@/lib/api";
 import SubcategoryIntake from "@/components/SubcategoryIntake";
+import { findSubcategory } from "@/lib/subcategories";
 import type { Category } from "@/contract/types";
 
 // The page a shopper lands on after clicking a subcategory tile (e.g.
-// Home & furniture -> Living room). Validates both the category and the
-// subcategory exist, then hands off to the intake form.
+// Home & furniture -> Living room). It renders the intake form even when the
+// backend has no PUBLISHED products in this subcategory yet: the old behaviour
+// 404'd for any subcategory the backend didn't already list (it builds that
+// list from products), so "Set up Bedroom" from the profile page could dead-end.
 export default async function SubcategoryPage({
   params,
 }: {
@@ -16,8 +19,18 @@ export default async function SubcategoryPage({
   const page = await fetchCategory(cat);
   if (!page) notFound();
 
-  const subcategory = page.subcategories.find((s) => s.id === sub);
-  if (!subcategory) notFound();
+  // Prefer the backend's subcategory (it carries the real "essentials" list);
+  // fall back to the frontend's known subcategories so the questionnaire still
+  // works with no products yet. Only 404 if neither knows this subcategory.
+  const backendSub = page.subcategories.find((s) => s.id === sub);
+  const known = findSubcategory(page.category, sub);
+  if (!backendSub && !known) notFound();
+
+  const subcategory = {
+    id: sub,
+    name: backendSub?.name ?? known!.name,
+    essentials: backendSub?.essentials ?? [],
+  };
 
   return (
     <>

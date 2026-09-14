@@ -11,7 +11,7 @@ import { NextResponse } from "next/server";
 import type { TrackEvent } from "@/contract/types";
 
 export async function POST(req: Request) {
-  const event = (await req.json()) as TrackEvent;
+  const event = (await req.json().catch(() => null)) as TrackEvent | null;
   if (!event?.type || !event?.productId) {
     return NextResponse.json({ error: "Body must be a TrackEvent" }, { status: 400 });
   }

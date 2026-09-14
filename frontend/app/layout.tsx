@@ -3,6 +3,7 @@ import Link from "next/link";
 import BasketCount from "@/components/BasketCount";
 import SearchBox from "@/components/SearchBox";
 import AccountNav from "@/components/AccountNav";
+import { CATEGORIES } from "@/lib/categories";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -22,9 +23,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </Link>
             <SearchBox />
             <nav className="nav">
-              <Link href="/category/home">Home &amp; furniture</Link>
-              <Link href="/category/sport">Sport</Link>
-              <Link href="/category/tech">Technology</Link>
+              {CATEGORIES.map((c) => (
+                <Link key={c.id} href={`/category/${c.id}`}>{c.label}</Link>
+              ))}
               <AccountNav />
               <BasketCount />
             </nav>

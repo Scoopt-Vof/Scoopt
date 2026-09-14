@@ -14,7 +14,7 @@
 // ============================================================================
 
 import type { User } from "@supabase/supabase-js";
-import type { Account, AuthProvider } from "@/contract/types";
+import type { Account } from "@/contract/types";
 import { supabase } from "@/lib/supabaseClient";
 
 const KEY = "scoopt.account.v1";
@@ -58,6 +58,11 @@ if (typeof window !== "undefined") {
   });
 }
 
+// The local mirror is the synchronous read the UI needs, but it is only ever
+// written from the REAL Supabase session (onAuthStateChange above fires with
+// INITIAL_SESSION on load, and writes null when there is no session). With the
+// fake OAuth path removed, "signed in" can no longer be a fiction: it always
+// reflects a genuine Supabase session.
 export function currentAccount(): Account | null {
   return read();
 }
@@ -107,23 +112,36 @@ export async function signInWithEmail(email: string, password: string): Promise<
   return account;
 }
 
-// OAuth buttons. Real version: supabase.auth.signInWithOAuth({ provider }) —
-// requires the provider's OAuth app to be configured in the Supabase
-// dashboard first (Authentication → Sign In / Providers → Google/Apple).
-export async function signInWithProvider(provider: AuthProvider): Promise<Account> {
-  // ===== SWAP POINT — still fake until Google/Apple OAuth apps are set up. =====
-  const account: Account = {
-    id: "u_" + Math.random().toString(36).slice(2, 10),
-    email: provider === "google" ? "shopper@gmail.com" : "shopper@icloud.com",
-    provider,
-    createdAt: new Date().toISOString(),
-  };
-  write(account);
-  return account;
-}
+// OAuth (Google/Apple) is intentionally NOT implemented here. The previous
+// version faked it — it wrote a made-up account (shopper@gmail.com with a
+// random id) straight into localStorage without ever talking to Supabase, so
+// "signed in" could be a fiction one stray call away from being wired up. It
+// has been removed. When real OAuth is wanted, configure the provider's app in
+// the Supabase dashboard (Authentication → Sign In / Providers) and call
+// supabase.auth.signInWithOAuth({ provider }) here — that returns a real
+// session, which onAuthStateChange above turns into the local mirror, exactly
+// like email sign-in does.
 
 export async function signOut(): Promise<void> {
   await supabase.auth.signOut();
+  // Clear ALL Scoopt local data, not just the account record. Otherwise the
+  // next person on a shared computer would still see the previous user's
+  // profile, basket and "recently viewed" (all stored under scoopt.* keys).
+  // Note: this clears the LOCAL copy only. Deleting the shopper's row in
+  // Supabase when they ask to remove their data is a backend concern (G3) —
+  // there is no delete endpoint or RLS delete policy yet.
+  if (typeof window !== "undefined") {
+    try {
+      const scooptKeys: string[] = [];
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const k = window.localStorage.key(i);
+        if (k && k.startsWith("scoopt.")) scooptKeys.push(k);
+      }
+      scooptKeys.forEach((k) => window.localStorage.removeItem(k));
+    } catch {
+      /* storage blocked/full — nothing more we can do */
+    }
+  }
   write(null);
 }
 

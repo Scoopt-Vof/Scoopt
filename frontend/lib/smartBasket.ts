@@ -109,8 +109,18 @@ export function planBasket(
   items: { productId: string; productName: string; offers: Offer[] }[],
   rules: DeliveryRule[]
 ): SmartBasketResult {
-  const single = bestSingleStore(items, rules);
-  const split = smartSplit(items, rules);
+  // Only ever plan around offers a shopper can actually buy right now. The
+  // /basket/plan endpoint returns out-of-stock offers too (unlike /basket/compare),
+  // so if we don't filter here the "cheapest" pick could be something nobody can
+  // add to a cart. An item left with no in-stock offer becomes "missing", which
+  // is the honest outcome.
+  const inStockItems = items.map((it) => ({
+    ...it,
+    offers: it.offers.filter((o) => o.inStock),
+  }));
+
+  const single = bestSingleStore(inStockItems, rules);
+  const split = smartSplit(inStockItems, rules);
 
   // Decide the honest recommendation.
   let recommended: SmartBasketResult["recommended"] = "none";
@@ -128,11 +138,9 @@ export function planBasket(
         `buying everything at ${single.stores[0]} — even after delivery.`;
     } else {
       recommended = "single-store";
-      const wouldSave = round(sumCheapestItems(items) - single.itemsTotal);
       note =
         `Buy everything at ${single.stores[0]}. Splitting would scatter the order ` +
         `across more stores and the extra delivery wipes out the item savings.`;
-      void wouldSave;
     }
   } else if (split.complete) {
     // No single store carries everything — the split is the only complete way.
@@ -155,18 +163,6 @@ export function planBasket(
     savingVsSingle: saving,
     honestNote: note,
   };
-}
-
-// helper: the theoretical floor (sum of cheapest item prices, ignoring delivery)
-function sumCheapestItems(
-  items: { offers: Offer[] }[]
-): number {
-  return round(
-    items.reduce((s, it) => {
-      if (it.offers.length === 0) return s;
-      return s + it.offers.reduce((a, b) => (a.price <= b.price ? a : b)).price;
-    }, 0)
-  );
 }
 
 function round(n: number): number {
