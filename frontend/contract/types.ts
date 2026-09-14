@@ -281,6 +281,12 @@ export interface PriceHistory {
   min30: number;               // lowest price seen in the last 30 days
   max30: number;               // highest price seen in the last 30 days
   isLowest30: boolean;         // is the current min the lowest in 30 days?
+  // How many DISTINCT days have actually been observed. The frontend refuses to
+  // show "cheapest in 30 days" until there is enough history for the claim to be
+  // honest (a single observation is trivially the lowest ever). Optional so the
+  // frontend still works before the backend adds it — it falls back to counting
+  // distinct days in `points`. (Backend: see G11.)
+  observedDays?: number;
 }
 
 // ===========================================================================
