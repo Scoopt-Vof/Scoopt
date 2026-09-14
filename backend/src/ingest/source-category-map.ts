@@ -53,19 +53,22 @@ export type CategoryMap = Map<string, CategoryMapping>;
 /** Reads one source's whole map. Small table; one query, cached by the caller. */
 export async function loadCategoryMap(source: string): Promise<CategoryMap> {
   const rows = await sql<
-    { source_category_id: string; source_category_name: string | null; category: Category; subcategory: string }[]
+    { external_key: string; external_label: string | null; path: string }[]
   >`
-    select source_category_id, source_category_name, category, subcategory
-      from source_category_map
-     where source = ${source}
+    select scm.external_key, scm.external_label, cat.path
+      from source_category_map scm
+      join category cat on cat.id = scm.category_id
+     where scm.source_key = ${source}
   `;
 
   const map: CategoryMap = new Map();
   for (const r of rows) {
-    map.set(String(r.source_category_id), {
-      category: r.category,
-      subcategory: r.subcategory,
-      sourceCategoryName: r.source_category_name,
+    // path is like "home/furniture" or "sport/running"
+    const [category, subcategory] = r.path.split('/') as [Category, string];
+    map.set(String(r.external_key), {
+      category,
+      subcategory,
+      sourceCategoryName: r.external_label,
     });
   }
   return map;

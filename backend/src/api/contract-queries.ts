@@ -377,6 +377,9 @@ export async function getPriceHistory(id: string): Promise<PriceHistory | null> 
     min30: Math.min(...pool),
     max30: Math.max(...pool),
     isLowest30: currentMin <= Math.min(...pool) + 0.001,
+    // distinct days of price history observed; the frontend hides the
+    // "cheapest in 30 days" signal until 14+ distinct days exist.
+    observedDays: points.length > 0 ? points.length : undefined,
   };
 }
 

@@ -290,6 +290,7 @@ export interface PriceHistory {
   min30: number;               // lowest price seen in the last 30 days
   max30: number;               // highest price seen in the last 30 days
   isLowest30: boolean;         // is the current min the lowest in 30 days?
+  observedDays?: number;       // distinct days of price history observed
 }
 
 // ===========================================================================
