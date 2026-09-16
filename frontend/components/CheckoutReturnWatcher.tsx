@@ -56,10 +56,10 @@ export default function CheckoutReturnWatcher() {
       <div className="checkout-return-card">
         <h3>Welcome back</h3>
         <p>
-          Did you complete your order at <b>{prompt.store}</b> for {itemLabel}?
+          Did you complete your order at <b>{prompt.storeName ?? prompt.store}</b> for {itemLabel}?
         </p>
         <p className="note" style={{ margin: "6px 0 16px" }}>
-          We can&apos;t see what happens on {prompt.store}&apos;s own checkout, so we&apos;re just asking.
+          We can&apos;t see what happens on {prompt.storeName ?? prompt.store}&apos;s own checkout, so we&apos;re just asking.
         </p>
         <div className="checkout-return-actions">
           <button
@@ -67,7 +67,7 @@ export default function CheckoutReturnWatcher() {
             onClick={() => {
               confirmOrder(prompt);
               setPrompt(null);
-              setConfirmedStore(prompt.store);
+              setConfirmedStore(prompt.storeName ?? prompt.store);
             }}
           >
             Yes, I ordered it

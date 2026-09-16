@@ -9,6 +9,7 @@ import Link from "next/link";
 import { getBasket, removeFromBasket, clearBasket, subscribe } from "@/lib/basket";
 import { fetchBasketPlanData, type BasketPlanData } from "@/lib/api";
 import { planBasket } from "@/lib/smartBasket";
+import { storeNameMap, storeLabel } from "@/lib/stores";
 import type { SmartBasketResult, BasketPlan } from "@/contract/types";
 import { formatEuro } from "@/lib/format";
 
@@ -65,6 +66,10 @@ export default function BasketPage() {
     );
   }
 
+  // Slug -> display-name lookup, built from the offers already loaded. Plans key
+  // on the slug; this just controls what the shopper reads.
+  const storeNames = storeNameMap(planData?.items ?? []);
+
   return (
     <>
       <div className="crumb"><Link href="/">Home</Link> › <b>Basket</b></div>
@@ -103,7 +108,7 @@ export default function BasketPage() {
                 {result.recommended === "smart-split"
                   ? `Split across ${result.smartSplit?.stores.length} stores and save ${eur(result.savingVsSingle)}`
                   : result.recommended === "single-store"
-                  ? `Buy everything at ${result.bestSingleStore?.stores[0]}`
+                  ? `Buy everything at ${storeLabel(result.bestSingleStore?.stores[0] ?? "", storeNames)}`
                   : "Some items aren't available yet"}
               </div>
               <p className="verdict-note">{result.honestNote}</p>
@@ -117,6 +122,7 @@ export default function BasketPage() {
                 plan={result.bestSingleStore}
                 title="Everything at one store"
                 winner={result.recommended === "single-store"}
+                names={storeNames}
               />
             )}
             {result.smartSplit && result.smartSplit.stores.length > 1 && (
@@ -124,6 +130,7 @@ export default function BasketPage() {
                 plan={result.smartSplit}
                 title="Smart split across stores"
                 winner={result.recommended === "smart-split"}
+                names={storeNames}
               />
             )}
           </div>
@@ -157,7 +164,7 @@ export default function BasketPage() {
                   )}
                   {line ? (
                     <>
-                      <span className="bl-store">cheapest at {line.store}</span>
+                      <span className="bl-store">cheapest at {storeLabel(line.store, storeNames)}</span>
                       <span className="bl-price">{eur(line.price)}</span>
                     </>
                   ) : (
@@ -190,7 +197,7 @@ export default function BasketPage() {
   );
 }
 
-function PlanCard({ plan, title, winner }: { plan: BasketPlan; title: string; winner: boolean }) {
+function PlanCard({ plan, title, winner, names }: { plan: BasketPlan; title: string; winner: boolean; names: Record<string, string> }) {
   return (
     <div className={`plan-card ${winner ? "winner" : ""}`}>
       <div className="plan-top">
@@ -203,7 +210,7 @@ function PlanCard({ plan, title, winner }: { plan: BasketPlan; title: string; wi
         <span>Delivery {plan.deliveryTotal === 0 ? "free" : eur(plan.deliveryTotal)}</span>
       </div>
       <div className="plan-stores">
-        {plan.stores.map((s) => <span key={s} className="plan-store">{s}</span>)}
+        {plan.stores.map((s) => <span key={s} className="plan-store">{storeLabel(s, names)}</span>)}
       </div>
     </div>
   );

@@ -1,11 +1,13 @@
 import type { RetailerSource } from './types';
 import { EbaySource } from './ebay';
+import { GsmNetSource } from './gsmnet';
 
 /**
  * Every source, keyed by the name you pass on the command line:
  *
  *   npm run ingest -- ebay-nl
  *   npm run ingest -- ebay-nl ebay-de   (comparison rows appear here)
+ *   npm run ingest -- ebay-nl gsm-net   (a second real retailer, via Awin)
  *   npm run ingest -- all
  *
  * `credentials` says what you need before it will run.
@@ -42,6 +44,13 @@ export const SOURCES: Record<string, SourceEntry> = {
   // ebay-gb was removed: eBay UK prices in GBP, ingest refuses non-EUR offers
   // (nothing converts currency), so every call spent eBay quota for nothing.
   // Re-add it only together with currency conversion.
+
+  'gsm-net': {
+    build: () => new GsmNetSource(),
+    credentials: ['GSMNET_FEED_URL'],
+    blurb: 'GSM Net (telecom/phones) via the Awin product feed — first affiliate-network retailer. ' +
+      'aw_deep_link is the tracked, commission-bearing click-out. See README-AWIN.md.',
+  },
 
   // ── Further affiliate programmes plug in here, one entry each. Every source
   //    must return prices a retailer actually charges. Anything with invented

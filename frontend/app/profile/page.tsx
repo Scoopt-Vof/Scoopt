@@ -248,7 +248,7 @@ export default function ProfilePage() {
             {orders.map((o) => (
               <div key={o.id} className="order-row">
                 <div className="order-row-main">
-                  <span className="order-store">{o.store}</span>
+                  <span className="order-store">{o.storeName ?? o.store}</span>
                   <span className="order-items">
                     {o.productNames.length === 1 ? o.productNames[0] : `${o.productNames.length} items`}
                   </span>

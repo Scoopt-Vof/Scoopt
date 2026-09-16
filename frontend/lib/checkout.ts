@@ -32,7 +32,8 @@ import { removeFromBasket } from "@/lib/basket";
 
 export interface PendingCheckout {
   id: string;
-  store: string;
+  store: string;            // retailer slug (the key)
+  storeName?: string;       // retailer display name for the shopper-facing prompt
   productIds: string[];
   productNames: string[];
   total: number;
@@ -41,7 +42,8 @@ export interface PendingCheckout {
 
 export interface Order {
   id: string;
-  store: string;
+  store: string;            // retailer slug (the key)
+  storeName?: string;       // retailer display name shown in order history
   productIds: string[];
   productNames: string[];
   total: number;
@@ -93,13 +95,15 @@ export function pendingIsRecognisable(p: PendingCheckout): boolean {
  *  be recognised. */
 export function startCheckout(
   store: string,
-  lines: { productId: string; productName: string; price: number; url: string }[]
+  lines: { productId: string; productName: string; price: number; url: string }[],
+  storeName?: string
 ): void {
   if (typeof window === "undefined" || lines.length === 0) return;
   lines.forEach((l) => window.open(l.url, "_blank", "noopener,noreferrer"));
   writePending({
     id: `co_${Date.now()}`,
     store,
+    storeName: storeName ?? store,
     productIds: lines.map((l) => l.productId),
     productNames: lines.map((l) => l.productName),
     total: round(lines.reduce((s, l) => s + l.price, 0)),
@@ -113,6 +117,7 @@ export function confirmOrder(p: PendingCheckout): Order {
   const order: Order = {
     id: p.id,
     store: p.store,
+    storeName: p.storeName ?? p.store,
     productIds: p.productIds,
     productNames: p.productNames,
     total: p.total,

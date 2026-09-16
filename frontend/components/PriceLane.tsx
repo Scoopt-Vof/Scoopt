@@ -11,10 +11,10 @@ import { formatEuro, timeAgo } from "@/lib/format";
 // the cheapest IN-STOCK offer earns that flag, so the shopper is never sent to a
 // "cheapest" price they can't actually buy.
 //
-// NOTE for the contract (flagged for Larry): Offer.store is the internal slug
-// ("ebay-nl") not a display name (A6), and item price and shipping are not
-// separated (A1/G7) — the backend folds shipping into Offer.price today. When
-// storeName and a shipping field are added to the contract, show them here.
+// Offer.storeName (A6, now in the contract) is the display name shown here;
+// Offer.store stays the slug used as the React key and the click-out tracking
+// key. STILL flagged for Larry: item price and shipping are not separated
+// (A1/G7) — the backend folds shipping into Offer.price today.
 export default function PriceLane({ offers }: { offers: Offer[] }) {
   if (offers.length === 0) return <p className="note">No prices available yet.</p>;
 
@@ -40,7 +40,7 @@ export default function PriceLane({ offers }: { offers: Offer[] }) {
             onClick={() => track("click_out", o.productId, { store: o.store })}
           >
             <div className="lane-store">
-              {o.store}
+              {o.storeName || o.store}
               {!o.inStock && <span className="lane-oos-tag">out of stock</span>}
               {checked && <span className="lane-checked">checked {checked}</span>}
             </div>

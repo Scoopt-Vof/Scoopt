@@ -36,9 +36,10 @@ export interface Product {
   subcategory: string;        // e.g. "hardlopen"
   image: string;              // licensed (Icecat) or retailer-feed image URL
   specs?: Record<string, string>; // optional key/value specs
-  // Optional plain-language product description (from Icecat's data sheet).
-  // Stored on product.description and served here; the product page shows it
-  // when present. Kept in step with frontend/contract/types.ts.
+  // Optional plain-language product description (e.g. from Icecat). The product
+  // page shows it when present. Additive: the backend can start sending it
+  // without the frontend changing (see findings A9 / G13 for the source +
+  // attribution the backend still needs to supply).
   description?: string;
 }
 
@@ -48,7 +49,8 @@ export interface Product {
 // ---------------------------------------------------------------------------
 export interface Offer {
   productId: string;          // links back to Product.id
-  store: string;              // "bol.com", "amazon.nl", ...
+  store: string;              // retailer SLUG — stable key ("ebay-nl", "gsm-net"); used for basket/history matching
+  storeName: string;          // retailer DISPLAY name shown to shoppers ("eBay Netherlands", "GSM Net")
   price: number;              // EUR, incl. VAT
   currency: "EUR";
   inStock: boolean;
@@ -290,7 +292,12 @@ export interface PriceHistory {
   min30: number;               // lowest price seen in the last 30 days
   max30: number;               // highest price seen in the last 30 days
   isLowest30: boolean;         // is the current min the lowest in 30 days?
-  observedDays?: number;       // distinct days of price history observed
+  // How many DISTINCT days have actually been observed. The frontend refuses to
+  // show "cheapest in 30 days" until there is enough history for the claim to be
+  // honest (a single observation is trivially the lowest ever). Optional so the
+  // frontend still works before the backend adds it — it falls back to counting
+  // distinct days in `points`. (Backend: see G11.)
+  observedDays?: number;
 }
 
 // ===========================================================================

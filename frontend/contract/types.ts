@@ -44,7 +44,8 @@ export interface Product {
 // ---------------------------------------------------------------------------
 export interface Offer {
   productId: string;          // links back to Product.id
-  store: string;              // "bol.com", "amazon.nl", ...
+  store: string;              // retailer SLUG — stable key ("ebay-nl", "gsm-net"); used for basket/history matching
+  storeName: string;          // retailer DISPLAY name shown to shoppers ("eBay Netherlands", "GSM Net")
   price: number;              // EUR, incl. VAT
   currency: "EUR";
   inStock: boolean;

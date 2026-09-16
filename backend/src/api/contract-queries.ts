@@ -85,7 +85,7 @@ const byId = (id: string) =>
   sql`(p.contract_id = ${id} or p.id::text = ${id})`;
 
 interface OfferRow {
-  contract_id: string | null; product_id: string; slug: string;
+  contract_id: string | null; product_id: string; slug: string; name: string;
   price_cents: number; shipping_cents: number; in_stock: boolean;
   product_url: string; last_seen_at: Date;
 }
@@ -93,7 +93,11 @@ interface OfferRow {
 function toOffer(r: OfferRow): Offer {
   return {
     productId: publicProductId(r.contract_id, r.product_id),
+    // `store` stays the slug: it is the stable key the basket comparison,
+    // delivery rules and price history all join on. `storeName` is the display
+    // name the UI shows, so a shopper sees "GSM Net", not "gsm-net".
     store: r.slug,
+    storeName: r.name,
     // Shipping is folded into the price here because the contract's Offer has
     // no shipping field. The database keeps them separate — which is the right
     // call, and the reason the DB ranks on price+shipping while the contract
@@ -119,7 +123,7 @@ function toOffer(r: OfferRow): Offer {
 async function offersFor(productDbIds: string[]): Promise<Map<string, Offer[]>> {
   if (productDbIds.length === 0) return new Map();
   const rows = await sql<OfferRow[]>`
-    select p.contract_id, o.product_id, r.slug, o.price_cents, o.shipping_cents,
+    select p.contract_id, o.product_id, r.slug, r.name, o.price_cents, o.shipping_cents,
            o.in_stock, o.product_url, o.last_seen_at
       from offer o
       join retailer r on r.id = o.retailer_id

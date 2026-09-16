@@ -21,6 +21,7 @@ export const CategorySchema = z.enum(['home', 'sport', 'tech']);
 export const OfferSchema = z.object({
   productId: z.string().min(1),
   store: z.string().min(1),
+  storeName: z.string().min(1),
   price: euros,
   currency: z.literal('EUR'),
   inStock: z.boolean(),

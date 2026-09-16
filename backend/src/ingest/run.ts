@@ -280,6 +280,7 @@ export async function ingest(
  */
 function defaultSourceKey(retailerSlug: string): string | null {
   if (retailerSlug.startsWith('ebay')) return 'ebay';
+  if (retailerSlug === 'gsm-net') return 'gsmnet';
   return null;
 }
 

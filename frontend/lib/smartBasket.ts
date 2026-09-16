@@ -20,6 +20,7 @@
 import type {
   Offer, DeliveryRule, PlanLine, BasketPlan, SmartBasketResult,
 } from "@/contract/types";
+import { storeNameMap, storeLabel } from "@/lib/stores";
 
 const eur = (n: number) => `€${n.toFixed(2)}`;
 
@@ -119,6 +120,10 @@ export function planBasket(
     offers: it.offers.filter((o) => o.inStock),
   }));
 
+  // Slug -> display-name lookup for the plain-language note below. The plans
+  // themselves keep slugs in `stores`/`lines[].store` (the identity key); only
+  // the shopper-facing sentence is translated to real names.
+  const names = storeNameMap(items);
   const single = bestSingleStore(inStockItems, rules);
   const split = smartSplit(inStockItems, rules);
 
@@ -135,11 +140,11 @@ export function planBasket(
       saving = round(single.grandTotal - split.grandTotal);
       note =
         `Splitting across ${split.stores.length} stores saves ${eur(saving)} versus ` +
-        `buying everything at ${single.stores[0]} — even after delivery.`;
+        `buying everything at ${storeLabel(single.stores[0], names)} — even after delivery.`;
     } else {
       recommended = "single-store";
       note =
-        `Buy everything at ${single.stores[0]}. Splitting would scatter the order ` +
+        `Buy everything at ${storeLabel(single.stores[0], names)}. Splitting would scatter the order ` +
         `across more stores and the extra delivery wipes out the item savings.`;
     }
   } else if (split.complete) {
@@ -151,7 +156,7 @@ export function planBasket(
       `is a split across ${split.stores.length} stores.`;
   } else if (single) {
     recommended = "single-store";
-    note = `Buy everything at ${single.stores[0]}.`;
+    note = `Buy everything at ${storeLabel(single.stores[0], names)}.`;
   } else {
     note = `Some items aren't available at the stores we cover yet.`;
   }

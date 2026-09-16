@@ -12,6 +12,7 @@ import { getBasket, subscribe as subscribeBasket } from "@/lib/basket";
 import { fetchBasketPlanData, type BasketPlanData } from "@/lib/api";
 import { planBasket } from "@/lib/smartBasket";
 import { startCheckout } from "@/lib/checkout";
+import { storeNameMap, storeLabel } from "@/lib/stores";
 import { loadDelivery, hasDelivery, type DeliveryDetails } from "@/lib/delivery";
 import { currentAccount } from "@/lib/auth";
 import { formatEuro } from "@/lib/format";
@@ -102,6 +103,8 @@ export default function CheckoutPage() {
   const plan: BasketPlan | undefined =
     result?.recommended === "smart-split" ? result.smartSplit : result?.bestSingleStore;
   const groups = groupByStore(plan, planData);
+  // Slug -> display-name lookup; groups key on the slug, this labels them.
+  const storeNames = storeNameMap(planData?.items ?? []);
 
   return (
     <>
@@ -154,7 +157,7 @@ export default function CheckoutPage() {
         <div className="checkout-store-group" key={g.store}>
           <div className="checkout-store-head">
             <h2 className="section-h" style={{ margin: 0 }}>
-              {g.store}
+              {storeLabel(g.store, storeNames)}
             </h2>
             <span className="checkout-store-total">{eur(g.total)}</span>
           </div>
@@ -171,15 +174,15 @@ export default function CheckoutPage() {
             onClick={() => {
               const openable = g.lines.filter((l) => l.url);
               if (openable.length === 0) return;
-              startCheckout(g.store, openable);
+              startCheckout(g.store, openable, storeLabel(g.store, storeNames));
               setStartedStore(g.store);
             }}
           >
-            Proceed to checkout at {g.store} →
+            Proceed to checkout at {storeLabel(g.store, storeNames)} →
           </button>
           {startedStore === g.store && (
             <p className="note" style={{ marginTop: 8 }}>
-              Opened {g.lines.length > 1 ? `${g.lines.length} tabs` : "a new tab"} for {g.store}. Come back to this
+              Opened {g.lines.length > 1 ? `${g.lines.length} tabs` : "a new tab"} for {storeLabel(g.store, storeNames)}. Come back to this
               tab when you&apos;re done and we&apos;ll ask whether it went through.
             </p>
           )}
