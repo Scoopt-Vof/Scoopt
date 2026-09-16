@@ -49,6 +49,41 @@ export interface IngestOptions {
   sourceKey?: string | null;
 }
 
+/**
+ * How many offers to process at once. Each offer is an independent
+ * product+offer+observation transaction plus classification, and the wall-clock
+ * cost is almost entirely network round-trips to the database, not CPU. Running
+ * a handful concurrently cuts a large feed (GSM Net is ~39k rows) from about an
+ * hour to minutes. Kept at or below the connection pool size (PG_POOL_MAX, 5 by
+ * default) so it saturates the pool without over-subscribing it — raise BOTH
+ * together if your database can take more connections. Set INGEST_CONCURRENCY=1
+ * to restore the old strictly-sequential behaviour.
+ */
+const INGEST_CONCURRENCY = (() => {
+  const n = Number(process.env.INGEST_CONCURRENCY ?? 5);
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 5;
+})();
+
+/**
+ * Runs `fn` over every item with at most `limit` in flight at once. A fixed set
+ * of workers pull from a shared cursor, so a slow row never stalls the others
+ * and the pool stays busy. Order is not preserved, which is fine here: every
+ * row is matched by EAN and each is independent. A throw propagates (via
+ * Promise.all) and fails the run, exactly as the sequential loop did.
+ */
+async function runWithConcurrency<T>(
+  items: T[], limit: number, fn: (item: T) => Promise<void>
+): Promise<void> {
+  let cursor = 0;
+  const worker = async (): Promise<void> => {
+    while (cursor < items.length) {
+      const i = cursor++;
+      await fn(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+}
+
 export async function ingest(
   source: RetailerSource,
   options: IngestOptions = {}
@@ -119,12 +154,16 @@ export async function ingest(
     await sql`update ingest_run set raw_archive_path = ${archivePath} where id = ${run.id}`;
 
     // ---- 3 + 4. normalise, match, store ---------------------------------
-    for (const raw of offers) {
+    // Each row is processed independently; runWithConcurrency (below) runs up to
+    // INGEST_CONCURRENCY of these at once. The shared counters are plain closure
+    // variables — safe to increment here because JavaScript runs this on a
+    // single thread, so no two increments ever interleave mid-statement.
+    const processOffer = async (raw: RawOffer): Promise<void> => {
       const rejection = validate(raw);
       if (rejection) {
         await queueForReview(retailer.id, raw, rejection);
         queuedForReview++;
-        continue;
+        return;
       }
 
       const ean = normaliseEan(raw.ean)!;
@@ -248,7 +287,9 @@ export async function ingest(
           console.warn(`  [classify] product ${product.id} failed: ${String(err).split('\n')[0]}`);
         }
       }
-    }
+    };
+
+    await runWithConcurrency(offers, INGEST_CONCURRENCY, processOffer);
 
     await sql`
       update ingest_run
