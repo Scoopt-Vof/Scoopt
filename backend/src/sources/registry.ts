@@ -1,6 +1,9 @@
 import type { RetailerSource } from './types';
 import { EbaySource } from './ebay';
 import { GsmNetSource } from './gsmnet';
+import { JdSportsSource } from './jd-sports';
+import { KnivesandtoolsSource } from './knivesandtools';
+import { BrunoBedSource } from './bruno-bed';
 
 /**
  * Every source, keyed by the name you pass on the command line:
@@ -56,6 +59,28 @@ export const SOURCES: Record<string, SourceEntry> = {
   //    must return prices a retailer actually charges. Anything with invented
   //    prices carries `synthetic: true`, which keeps it out of `all` and
   //    refuses to run without an explicit override. ─────────────────────────
+
+  // Applied for on Awin 2026-09 and awaiting advertiser approval. The adapters
+  // are ready; each goes live the moment its programme is approved and its
+  // <SLUG>_FEED_URL (from Create-a-Feed) is set in .env / Railway. Until then
+  // they have no feed URL, so `all` skips them and naming one is refused with a
+  // clear message. Add the slug to package.json `ingest:railway` only once its
+  // feed URL exists, so the nightly run never aborts on a missing credential.
+  'jd-sports': {
+    build: () => new JdSportsSource(),
+    credentials: ['JDSPORTS_FEED_URL'],
+    blurb: 'JD Sports (sportswear/trainers) via the Awin product feed. See README-AWIN.md.',
+  },
+  'knivesandtools': {
+    build: () => new KnivesandtoolsSource(),
+    credentials: ['KNIVESANDTOOLS_FEED_URL'],
+    blurb: 'Knivesandtools (knives/tools/outdoor/kitchen) via the Awin product feed. See README-AWIN.md.',
+  },
+  'bruno-bed': {
+    build: () => new BrunoBedSource(),
+    credentials: ['BRUNOBED_FEED_URL'],
+    blurb: 'Bruno Bed (beds/mattresses/home) via the Awin product feed. See README-AWIN.md.',
+  },
 };
 
 export function resolveSources(names: string[]): RetailerSource[] {
