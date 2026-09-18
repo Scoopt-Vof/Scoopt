@@ -8,6 +8,16 @@ import ProductSpecs from "@/components/ProductSpecs";
 import TrackView from "@/components/TrackView";
 import AddToBasket from "@/components/AddToBasket";
 
+// Cache the rendered page for 10 minutes (matches CATALOG_REVALIDATE in lib/api.ts).
+export const revalidate = 600;
+
+// No pages are built ahead of time; each one is rendered on its first visit and
+// then served from cache. Without this, Next.js treats the route as fully
+// dynamic and renders it again on every request.
+export async function generateStaticParams() {
+  return [];
+}
+
 export default async function ProductPage({
   params,
 }: {

@@ -5,6 +5,16 @@ import SubcategoryIntake from "@/components/SubcategoryIntake";
 import { findSubcategory } from "@/lib/subcategories";
 import type { Category } from "@/contract/types";
 
+// Cache the rendered page for 10 minutes (matches CATALOG_REVALIDATE in lib/api.ts).
+export const revalidate = 600;
+
+// No pages are built ahead of time; each one is rendered on its first visit and
+// then served from cache. Without this, Next.js treats the route as fully
+// dynamic and renders it again on every request.
+export async function generateStaticParams() {
+  return [];
+}
+
 // The page a shopper lands on after clicking a subcategory tile (e.g.
 // Home & furniture -> Living room). It renders the intake form even when the
 // backend has no PUBLISHED products in this subcategory yet: the old behaviour
