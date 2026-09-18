@@ -3,6 +3,16 @@ import { notFound } from "next/navigation";
 import { fetchCategory, fetchCategoryProducts } from "@/lib/api";
 import CategoryBrowse from "@/components/CategoryBrowse";
 
+// Cache the rendered page for 10 minutes (matches CATALOG_REVALIDATE in lib/api.ts).
+export const revalidate = 600;
+
+// No pages are built ahead of time; each one is rendered on its first visit and
+// then served from cache. Without this, Next.js treats the route as fully
+// dynamic and renders it again on every request.
+export async function generateStaticParams() {
+  return [];
+}
+
 // A Server Component that fetches data on the server before rendering.
 // `params` is a Promise in the current Next.js App Router — we await it.
 export default async function CategoryPage({
@@ -11,14 +21,18 @@ export default async function CategoryPage({
   params: Promise<{ cat: string }>;
 }) {
   const { cat } = await params;
-  const page = await fetchCategory(cat);
-  if (!page) notFound();
 
-  // Products in this category and everything below it, straight from the
-  // database. This used to be searchProducts("") filtered in JavaScript, which
-  // only ever saw the 200 oldest products in the whole catalogue and so lost
-  // whole categories as the catalogue grew.
-  const productPage = await fetchCategoryProducts(cat, { limit: 48 });
+  // The category and its products are fetched at the same time rather than one
+  // after the other, so the page waits for the slower of the two, not the sum.
+  // Products come straight from the database. This used to be
+  // searchProducts("") filtered in JavaScript, which only ever saw the 200
+  // oldest products in the whole catalogue and so lost whole categories as
+  // the catalogue grew.
+  const [page, productPage] = await Promise.all([
+    fetchCategory(cat),
+    fetchCategoryProducts(cat, { limit: 48 }),
+  ]);
+  if (!page) notFound();
   const products = productPage?.products ?? [];
 
   return (
