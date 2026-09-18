@@ -41,8 +41,18 @@ function resolve(path: string): string {
   return `${base}${path}`;
 }
 
+// Catalogue reads (product, category, category products) are cached by Next.js
+// for CATALOG_REVALIDATE seconds. Prices only change when the ingest job runs,
+// so there is no reason to make every visitor wait on a live backend + database
+// round trip. The "catalog" tag lets an ingest run clear it early with
+// revalidateTag("catalog") if we ever want prices to show up instantly.
+// Anything personal or user-specific (basket, search, personalise, price
+// history) stays uncached below.
+const CATALOG_REVALIDATE = 600; // 10 minutes
+const catalogCache = { next: { revalidate: CATALOG_REVALIDATE, tags: ["catalog"] } };
+
 export async function fetchProduct(id: string): Promise<ProductWithOffers | null> {
-  const res = await fetch(resolve(`/api/product/${id}`), { cache: "no-store" });
+  const res = await fetch(resolve(`/api/product/${id}`), catalogCache);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`fetchProduct failed: ${res.status}`);
   return res.json();
@@ -55,7 +65,7 @@ export async function searchProducts(q: string): Promise<Product[]> {
 }
 
 export async function fetchCategory(cat: string): Promise<CategoryPage | null> {
-  const res = await fetch(resolve(`/api/category/${cat}`), { cache: "no-store" });
+  const res = await fetch(resolve(`/api/category/${cat}`), catalogCache);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`fetchCategory failed: ${res.status}`);
   return res.json();
@@ -87,14 +97,13 @@ export async function fetchCategoryProducts(
   if (opts.tags?.length) qs.set("tags", opts.tags.join(","));
   const query = qs.toString() ? `?${qs}` : "";
 
-  const res = await fetch(resolve(`/api/categories/${path}/products${query}`), {
-    cache: "no-store",
-  });
+  const res = await fetch(resolve(`/api/categories/${path}/products${query}`), catalogCache);
   if (res.status === 404) return null;
-  // A misconfigured or unreachable backend returns 502/503 here. Return null
-  // rather than throwing: the category page still has its subcategory tiles to
-  // render, and an empty product grid is honest.
-  if (!res.ok) return null;
+  // A misconfigured or unreachable backend returns 502/503 here. Throw rather
+  // than return an empty grid: this page is cached, and an empty grid rendered
+  // during a brief backend hiccup would be served to everyone for the whole
+  // cache window. Throwing makes Next.js keep serving the last good version.
+  if (!res.ok) throw new Error(`fetchCategoryProducts failed: ${res.status}`);
   return res.json();
 }
 
