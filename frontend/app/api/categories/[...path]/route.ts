@@ -16,5 +16,5 @@ export async function GET(
   const { path } = await params;
   const search = new URL(req.url).search;
   const encoded = path.map(encodeURIComponent).join("/");
-  return proxy(`/api/categories/${encoded}${search}`);
+  return proxy(`/api/categories/${encoded}${search}`, undefined, { catalog: true });
 }

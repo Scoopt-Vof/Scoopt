@@ -6,5 +6,5 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  return proxy(`/api/product/${encodeURIComponent(id)}`);
+  return proxy(`/api/product/${encodeURIComponent(id)}`, undefined, { catalog: true });
 }

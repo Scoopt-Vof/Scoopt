@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { sql } from '../lib/db';
+import { clearSiteCache } from '../lib/site-cache';
 import { isValidEan13, normaliseEan } from '../lib/ean';
 import { isSanePrice } from '../lib/money';
 import type { RetailerSource, RawOffer } from '../sources/types';
@@ -430,6 +431,11 @@ if (isMain) {
 
     await sql.end();
     if (failed === sources.length && sources.length > 0) process.exit(1);
+
+    // New prices are in the database — tell the website to drop its cached
+    // copy so visitors see them now rather than within the 6-hour backstop.
+    // Skipped when every source failed (nothing changed). Never throws.
+    await clearSiteCache('ingest finished');
   })().catch(async (e) => {
     console.error('\ningest failed:', String(e));
     await sql.end();
