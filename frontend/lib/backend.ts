@@ -36,7 +36,7 @@ export async function proxy(
   try {
     const res = await fetch(
       `${BACKEND_URL}${path}`,
-      opts.catalog ? { ...init, ...catalogFetchInit } : { ...init, cache: "no-store" }
+      opts.catalog ? { ...init, ...catalogFetchInit(path) } : { ...init, cache: "no-store" }
     );
     const body = await res.text();
     return new NextResponse(body, {

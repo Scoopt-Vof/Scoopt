@@ -6,9 +6,10 @@
 //  job on Railway runs, so every visitor can safely be served the same copy.
 //
 //  How it stays fresh:
-//    1. When the ingest job finishes it calls POST /api/revalidate, which
-//       clears everything tagged CATALOG_TAG straight away (see
-//       app/api/revalidate/route.ts). Prices on the site are then never older
+//    1. When the ingest job finishes it calls POST /api/revalidate with the
+//       products whose prices changed; those products and the category
+//       listings are cleared straight away (a full clear of CATALOG_TAG is
+//       used for very large changes). Prices on the site are then never older
 //       than the database.
 //    2. CATALOG_REVALIDATE is only a backstop: if that call ever fails, a
 //       cached copy is still thrown away after this many seconds.
@@ -30,6 +31,25 @@ export const CATALOG_TAG = "catalog";
 // (app/category/..., app/product/...) — Next.js needs a literal number there.
 export const CATALOG_REVALIDATE = 3600;
 
-export const catalogFetchInit: RequestInit = {
-  next: { revalidate: CATALOG_REVALIDATE, tags: [CATALOG_TAG] },
-};
+// Finer tags, so an ingest run that changed a few prices clears only those
+// products (plus the category listings, which show every product's lowest
+// price) instead of the whole catalogue. See app/api/revalidate/route.ts.
+export const LISTING_TAG = "catalog:listing";
+export const productTag = (id: string) => `catalog:product:${id}`;
+
+/**
+ * Tags for a cached backend path. Everything gets CATALOG_TAG (so a full clear
+ * still works); product and price-history reads also get their product's tag;
+ * category reads get LISTING_TAG.
+ */
+export function catalogTagsFor(path: string): string[] {
+  const m = path.match(/^\/api\/(?:product|price-history)\/([^/?#]+)/);
+  if (m) return [CATALOG_TAG, productTag(decodeURIComponent(m[1]))];
+  if (/^\/api\/categor(?:y|ies)\//.test(path)) return [CATALOG_TAG, LISTING_TAG];
+  return [CATALOG_TAG];
+}
+
+/** fetch() options for a cached catalogue read of `path` (a backend /api path). */
+export function catalogFetchInit(path: string): RequestInit {
+  return { next: { revalidate: CATALOG_REVALIDATE, tags: catalogTagsFor(path) } };
+}

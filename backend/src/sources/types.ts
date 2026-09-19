@@ -60,6 +60,13 @@ export interface RawOffer {
   sourceCategoryLabel?: string | null;
   /** Condition as the source states it — becomes a tag, not a category. */
   condition?: string | null;
+  /**
+   * Built from a price refresh of an offer we already know (e.g. an eBay
+   * search result), not from a full product record. Ingest updates the offer
+   * and price history but does not re-classify the product or touch its
+   * details: the partial record must not overwrite what the full one said.
+   */
+  refreshOnly?: boolean;
 }
 
 export interface FetchResult {
@@ -71,6 +78,16 @@ export interface FetchResult {
   rawPayload: string;
 }
 
+/**
+ * What the ingest job already knows about this retailer, handed to fetch() so
+ * a source can skip expensive calls for items it has seen before (eBay: the
+ * getItem call that is only needed to learn an item's EAN).
+ */
+export interface FetchContext {
+  /** retailer_sku -> the EAN of the product that offer is attached to. */
+  knownEans: Map<string, string>;
+}
+
 export interface RetailerSource {
   /** Must match a `retailer.slug` row in the database. */
   readonly slug: string;
@@ -80,5 +97,5 @@ export interface RetailerSource {
   readonly sourceKind: 'official_api' | 'affiliate_feed' | 'fixture';
   readonly affiliateNetwork?: string;
 
-  fetch(): Promise<FetchResult>;
+  fetch(ctx?: FetchContext): Promise<FetchResult>;
 }

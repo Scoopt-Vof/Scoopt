@@ -46,10 +46,9 @@ function resolve(path: string): string {
 // cached — see lib/catalogCache.ts for how long and how they are cleared.
 // Anything personal or user-specific (basket, search, personalise) stays
 // uncached below.
-const catalogCache = catalogFetchInit;
 
 export async function fetchProduct(id: string): Promise<ProductWithOffers | null> {
-  const res = await fetch(resolve(`/api/product/${id}`), catalogCache);
+  const res = await fetch(resolve(`/api/product/${id}`), catalogFetchInit(`/api/product/${id}`));
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`fetchProduct failed: ${res.status}`);
   return res.json();
@@ -62,7 +61,7 @@ export async function searchProducts(q: string): Promise<Product[]> {
 }
 
 export async function fetchCategory(cat: string): Promise<CategoryPage | null> {
-  const res = await fetch(resolve(`/api/category/${cat}`), catalogCache);
+  const res = await fetch(resolve(`/api/category/${cat}`), catalogFetchInit(`/api/category/${cat}`));
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`fetchCategory failed: ${res.status}`);
   return res.json();
@@ -94,7 +93,7 @@ export async function fetchCategoryProducts(
   if (opts.tags?.length) qs.set("tags", opts.tags.join(","));
   const query = qs.toString() ? `?${qs}` : "";
 
-  const res = await fetch(resolve(`/api/categories/${path}/products${query}`), catalogCache);
+  const res = await fetch(resolve(`/api/categories/${path}/products${query}`), catalogFetchInit(`/api/categories/${path}/products${query}`));
   if (res.status === 404) return null;
   // A misconfigured or unreachable backend returns 502/503 here. Throw rather
   // than return an empty grid: this page is cached, and an empty grid rendered
@@ -137,7 +136,7 @@ export async function fetchBasketPlanData(items: string[]): Promise<BasketPlanDa
 
 // Price history for a product — powers "cheapest in 30 days" honest signals.
 export async function fetchPriceHistory(id: string): Promise<PriceHistory | null> {
-  const res = await fetch(resolve(`/api/price-history/${id}`), catalogCache);
+  const res = await fetch(resolve(`/api/price-history/${id}`), catalogFetchInit(`/api/price-history/${id}`));
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`fetchPriceHistory failed: ${res.status}`);
   return res.json();
