@@ -341,18 +341,43 @@ export async function getPriceHistory(id: string): Promise<PriceHistory | null> 
   // like with like. Observations from before 013 have no shipping recorded
   // (NULL, read as 0) and no currency (NULL, read as EUR — ingest refused
   // everything else long before that migration).
+  //
+  // Since 015 a row is written only when something CHANGED, so each row is a
+  // PERIOD: it holds from its observed_at until the next row for the same
+  // offer started — or, if the next row records prev_seen_at, until then (a
+  // gap: the offer was not seen in between). The newest row holds until the
+  // offer was last confirmed (offer.last_seen_at). Every day a period touches
+  // becomes a point, exactly as a row-per-run history used to produce.
   const rows = await sql<{ day: Date; total_cents: number; slug: string }[]>`
-    select distinct on (day)
-           date_trunc('day', po.observed_at)::date as day,
-           (po.price_cents + coalesce(po.shipping_cents, 0))::int as total_cents,
-           r.slug
-      from price_observation po
-      join retailer r on r.id = po.retailer_id and r.is_active
-     where po.product_id = ${row.id}
-       and po.observed_at >= now() - interval '30 days'
-       and po.in_stock
-       and coalesce(po.currency, 'EUR') = 'EUR'
-     order by day asc, total_cents asc`;
+    with obs as (
+      select po.retailer_id, po.observed_at, po.in_stock,
+             (po.price_cents + coalesce(po.shipping_cents, 0))::int as total_cents,
+             coalesce(po.currency, 'EUR') as currency,
+             lead(coalesce(po.prev_seen_at, po.observed_at))
+               over (partition by po.retailer_id order by po.observed_at, po.id) as next_start
+        from price_observation po
+       where po.product_id = ${row.id}
+    ),
+    periods as (
+      select obs.*,
+             coalesce(obs.next_start,
+                      (select o.last_seen_at from offer o
+                        where o.product_id = ${row.id} and o.retailer_id = obs.retailer_id),
+                      obs.observed_at) as ends_at
+        from obs
+    )
+    select distinct on (d.day)
+           d.day::date as day, p.total_cents, r.slug
+      from periods p
+      join retailer r on r.id = p.retailer_id and r.is_active
+      cross join lateral generate_series(
+             date_trunc('day', greatest(p.observed_at, now() - interval '30 days')),
+             date_trunc('day', greatest(p.ends_at, p.observed_at)),
+             interval '1 day') as d(day)
+     where p.in_stock
+       and p.currency = 'EUR'
+       and p.ends_at >= now() - interval '30 days'
+     order by d.day asc, p.total_cents asc`;
 
   const points: PricePoint[] = rows.map((r) => ({
     at: r.day.toISOString(),
