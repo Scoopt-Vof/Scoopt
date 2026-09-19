@@ -24,9 +24,11 @@
 
 export const CATALOG_TAG = "catalog";
 
-// 6 hours. Keep in sync with `export const revalidate` in the catalogue pages
+// 1 hour. Prices are refreshed hourly and some shops (bol) require prices to
+// match their site "at all times", so a failed clear may never leave a price
+// on the site for longer than this. Keep in sync with `export const revalidate` in the catalogue pages
 // (app/category/..., app/product/...) — Next.js needs a literal number there.
-export const CATALOG_REVALIDATE = 21600;
+export const CATALOG_REVALIDATE = 3600;
 
 export const catalogFetchInit: RequestInit = {
   next: { revalidate: CATALOG_REVALIDATE, tags: [CATALOG_TAG] },

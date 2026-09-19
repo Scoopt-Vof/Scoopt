@@ -8,10 +8,10 @@ import ProductSpecs from "@/components/ProductSpecs";
 import TrackView from "@/components/TrackView";
 import AddToBasket from "@/components/AddToBasket";
 
-// Cache the rendered page. Cleared as soon as the ingest job finishes; 21600
-// seconds (6 h) is only the backstop. Keep in sync with CATALOG_REVALIDATE in
+// Cache the rendered page. Cleared as soon as the ingest job finishes; 3600
+// seconds (1 h) is only the backstop. Keep in sync with CATALOG_REVALIDATE in
 // lib/catalogCache.ts (Next.js needs a literal number here).
-export const revalidate = 21600;
+export const revalidate = 3600;
 
 // No pages are built ahead of time; each one is rendered on its first visit and
 // then served from cache. Without this, Next.js treats the route as fully

@@ -4,15 +4,15 @@
  * The frontend caches products, categories and prices so visitors don't wait
  * on the database. That cache must be cleared whenever the data changes, or
  * the site would show old prices. The data only changes when ingest runs, so
- * ingest calls this at the end (and the nightly refresh job calls it at 03:00).
+ * ingest calls this at the end of every run.
  *
- * Needs two env vars (set on the Railway services that run ingest / nightly):
+ * Needs two env vars (set on the Railway service that runs ingest):
  *   SITE_URL           e.g. https://scoopt.nl
  *   REVALIDATE_SECRET  the same value as REVALIDATE_SECRET in Vercel
  *
  * Never throws: a failed cache clear must not fail an ingest run that has
  * already written good data. It logs loudly instead and returns false; the
- * site's 6-hour backstop then refreshes the cache anyway.
+ * site's 1-hour backstop then refreshes the cache anyway.
  */
 export async function clearSiteCache(reason: string): Promise<boolean> {
   const site = process.env.SITE_URL?.replace(/\/$/, '');
@@ -20,7 +20,7 @@ export async function clearSiteCache(reason: string): Promise<boolean> {
   if (!site || !secret) {
     console.warn(
       `⚠ site cache NOT cleared (${reason}): SITE_URL and REVALIDATE_SECRET must both be set. ` +
-        'The site will pick up the new data within 6 hours instead of right away.'
+        'The site will pick up the new data within 1 hour instead of right away.'
     );
     return false;
   }

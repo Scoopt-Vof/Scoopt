@@ -1,7 +1,7 @@
 // POST /api/revalidate  ->  clears the cached catalogue straight away.
 //
 // Called by the backend's ingest job (backend/src/lib/site-cache.ts) when it has
-// finished loading new prices, and by the nightly refresh job. After this call
+// finished loading new prices. After this call
 // every product, category and price on the site is re-fetched from the
 // backend on its next visit, so the site is never older than the database.
 //

@@ -433,7 +433,7 @@ if (isMain) {
     if (failed === sources.length && sources.length > 0) process.exit(1);
 
     // New prices are in the database — tell the website to drop its cached
-    // copy so visitors see them now rather than within the 6-hour backstop.
+    // copy so visitors see them now rather than within the 1-hour backstop.
     // Skipped when every source failed (nothing changed). Never throws.
     await clearSiteCache('ingest finished');
   })().catch(async (e) => {
