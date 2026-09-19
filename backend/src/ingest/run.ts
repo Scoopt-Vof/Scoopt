@@ -2,6 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { sql } from '../lib/db';
 import { clearSiteCache } from '../lib/site-cache';
+import { tryStartJob, finishJob, ALERT_AFTER_FAILURES } from '../lib/job-state';
 import { isValidEan13, normaliseEan } from '../lib/ean';
 import { isSanePrice } from '../lib/money';
 import type { RetailerSource, RawOffer } from '../sources/types';
@@ -36,6 +37,13 @@ export interface IngestSummary {
   classified: number;
   /** Classified before with identical inputs — nothing written. */
   classificationsUnchanged: number;
+  /** Offers seen again exactly as stored: only their last_seen_at moved. */
+  offersUnchanged: number;
+  /**
+   * Public ids (and internal ids) of products whose price, stock, shipping,
+   * link or offer set changed in this run — what the website must re-fetch.
+   */
+  changedProductIds: string[];
 }
 
 export interface IngestOptions {
@@ -143,10 +151,26 @@ export async function ingest(
   let queuedForReview = 0;
   let classified = 0;
   let classificationsUnchanged = 0;
+  let offersUnchanged = 0;
+  const changedProductIds = new Set<string>();
 
   try {
+    // ---- 0. what do we already have? ---------------------------------------
+    // One query per run. It lets the source skip calls for listings it has seen
+    // before (eBay) and lets step 3 skip every row that has not changed, which
+    // is what makes an hourly run cheap: most rows only get last_seen_at moved.
+    const known = await sql<KnownOffer[]>`
+      select o.retailer_sku, o.product_url, o.price_cents, o.shipping_cents,
+             o.currency, o.in_stock, o.last_seen_at, p.ean
+        from offer o
+        join product p on p.id = o.product_id
+       where o.retailer_id = ${retailer.id}`;
+    const knownBySku = new Map(known.map((k) => [k.retailer_sku, k]));
+    const knownEans = new Map<string, string>();
+    for (const k of known) if (k.ean) knownEans.set(k.retailer_sku, k.ean);
+
     // ---- 1. acquire ------------------------------------------------------
-    const { offers, rawPayload } = await source.fetch();
+    const { offers, rawPayload } = await source.fetch({ knownEans });
     productsSeen = offers.length;
 
     // ---- 2. archive raw BEFORE parsing ----------------------------------
@@ -198,8 +222,8 @@ export async function ingest(
       // Status is 'draft', not 'published'. A product is only promoted once
       // the classifier has placed it with enough confidence — an unplaceable
       // product should be invisible to shoppers and visible to us.
-      const productId = await sql.begin(async (tx) => {
-        const [row] = await tx<{ id: number }[]>`
+      const productRow = await sql.begin(async (tx) => {
+        const [row] = await tx<{ id: number; contract_id: string | null }[]>`
           insert into product (ean, brand, title, category, image_url, description, status,
                                contract_id, unit, subcategory, specs)
           values (${ean}, ${raw.brand}, ${raw.title}, ${raw.category},
@@ -215,7 +239,7 @@ export async function ingest(
                 -- first one didn't, and losing it would silently degrade ranking.
                 specs       = product.specs || excluded.specs,
                 updated_at  = now()
-          returning id
+          returning id, contract_id
         `;
 
         // What we knew about this offer before this run — used to decide
@@ -262,10 +286,15 @@ export async function ingest(
           `;
           observationsWritten++;
         }
-        return row.id;
+        return row;
       });
-      const product = { id: productId };
+      const product = { id: productRow.id };
       offersUpserted++;
+      // This row differed from what was stored (or is new): the site must
+      // re-fetch this product. Both id forms are sent — pages use the public
+      // one, some links still use the internal one.
+      changedProductIds.add(String(productRow.id));
+      if (productRow.contract_id) changedProductIds.add(productRow.contract_id);
 
       // ---- 5. classify --------------------------------------------------
       // Runs AFTER validate() and BEFORE publication. Never blocks and never
@@ -273,7 +302,7 @@ export async function ingest(
       // and anything neither can place stays draft with a queue entry. Model
       // calls, if ever enabled, run in the backfill against unmapped KEYS
       // rather than against individual products.
-      if (classifier) {
+      if (classifier && !raw.refreshOnly) {
         try {
           // Store the source's OWN category before classifying. This is what
           // makes a mapping change a local re-run instead of a re-fetch: the
@@ -317,7 +346,26 @@ export async function ingest(
       }
     };
 
-    await runWithConcurrency(offers, INGEST_CONCURRENCY, processOffer);
+    // Rows identical to what is stored need no transaction, no history row and
+    // no classification — only "still there, checked now". Those are marked in
+    // bulk; everything else (new, changed, invalid, or unseen for a while) goes
+    // through the full path above.
+    const unchangedSkus: string[] = [];
+    const toProcess: RawOffer[] = [];
+    for (const raw of offers) {
+      const k = raw.retailerSku ? knownBySku.get(raw.retailerSku) : undefined;
+      if (k && isUnchanged(k, raw)) unchangedSkus.push(raw.retailerSku);
+      else toProcess.push(raw);
+    }
+    for (let i = 0; i < unchangedSkus.length; i += 5000) {
+      const chunk = unchangedSkus.slice(i, i + 5000);
+      await sql`
+        update offer set last_seen_at = now()
+         where retailer_id = ${retailer.id} and retailer_sku = any(${chunk}::text[])`;
+    }
+    offersUnchanged = unchangedSkus.length;
+
+    await runWithConcurrency(toProcess, INGEST_CONCURRENCY, processOffer);
 
     await sql`
       update ingest_run
@@ -339,6 +387,7 @@ export async function ingest(
   return {
     runId: run.id, productsSeen, offersUpserted, observationsWritten,
     queuedForReview, classified, classificationsUnchanged,
+    offersUnchanged, changedProductIds: [...changedProductIds],
   };
 }
 
@@ -365,6 +414,30 @@ export const PRICE_GAP_HOURS = (() => {
   const n = Number(process.env.PRICE_GAP_HOURS ?? 26);
   return Number.isFinite(n) && n > 0 ? n : 26;
 })();
+
+interface KnownOffer {
+  retailer_sku: string;
+  product_url: string;
+  price_cents: number;
+  shipping_cents: number;
+  currency: string;
+  in_stock: boolean;
+  last_seen_at: Date;
+  ean: string | null;
+}
+
+/**
+ * Is this feed row exactly what we already store — same product, same price,
+ * shipping, stock, currency and link, and seen recently enough that no gap row
+ * is due? Invalid rows are never "unchanged": they must reach the review queue.
+ */
+export function isUnchanged(k: KnownOffer, raw: RawOffer, now: Date = new Date()): boolean {
+  if (validate(raw)) return false;
+  if (!k.ean || normaliseEan(raw.ean) !== k.ean) return false;
+  if (raw.productUrl !== k.product_url) return false;
+  return !observationNeeded(
+    k, raw.priceCents, raw.shippingCents ?? 0, (raw.currency ?? 'EUR').toUpperCase(), raw.inStock, now);
+}
 
 /** Does this run need a new price_observation row for this offer? */
 export function observationNeeded(
@@ -413,6 +486,10 @@ async function queueForReview(retailerId: number, raw: RawOffer, reason: string)
   `;
 }
 
+const JOB = 'ingest';
+/** Above this many changed product ids, one full clear beats many small ones. */
+const TARGETED_CLEAR_MAX = Number(process.env.TARGETED_CLEAR_MAX ?? 500);
+
 // ---- CLI entry point -------------------------------------------------------
 //   npm run ingest -- ebay-nl          → one live source
 //   npm run ingest -- ebay-nl ebay-de  → two, and comparison rows appear
@@ -421,6 +498,7 @@ async function queueForReview(retailerId: number, raw: RawOffer, reason: string)
 const isMain = process.argv[1]?.endsWith('run.ts') || process.argv[1]?.endsWith('run.js');
 if (isMain) {
   const args = process.argv.slice(2).filter((a) => a !== '--');
+  let jobStarted = false;
 
   (async () => {
     if (args.includes('--list') || args.includes('-l')) {
@@ -430,6 +508,15 @@ if (isMain) {
     }
 
     const sources = resolveSources(args);
+
+    // Hourly runs must never overlap: if the previous run is still busy, this
+    // one steps aside (the next hour picks everything up).
+    if (!(jobStarted = await tryStartJob(JOB))) {
+      console.log('previous ingest run is still busy — skipping this run');
+      await sql.end();
+      return;
+    }
+
     console.log(`\ningesting from: ${sources.map((s) => s.slug).join(', ')}\n`);
 
     // Once per process, never per product: the taxonomy is twenty-seven rows
@@ -438,21 +525,27 @@ if (isMain) {
     console.log(`classifier ready: ${classifier.taxonomy.size} categories\n`);
 
     let failed = 0;
+    const errors: string[] = [];
+    const changed = new Set<string>();
     for (const source of sources) {
       const started = Date.now();
       try {
         const s = await ingest(source, { classifier });
+        s.changedProductIds.forEach((id) => changed.add(id));
         console.log(
-          `✓ ${source.slug}: ${s.productsSeen} seen, ${s.offersUpserted} offers, ` +
-          `${s.observationsWritten} observations, ${s.classified} classified, ` +
-          `${s.queuedForReview} queued, ${s.classificationsUnchanged} unchanged ` +
+          `✓ ${source.slug}: ${s.productsSeen} seen, ${s.offersUnchanged} unchanged, ` +
+          `${s.offersUpserted} new/changed offers, ${s.observationsWritten} history rows, ` +
+          `${s.classified} classified, ${s.queuedForReview} queued, ` +
+          `${s.classificationsUnchanged} classifications unchanged ` +
           `(${((Date.now() - started) / 1000).toFixed(1)}s)\n`
         );
       } catch (e) {
         // One bad source must not abort the rest — a rate limit at eBay should
         // not cost you the next source's run.
         failed++;
-        console.error(`✗ ${source.slug} failed: ${String(e).split('\n')[0]}\n`);
+        const msg = `${source.slug}: ${String(e).split('\n')[0]}`;
+        errors.push(msg);
+        console.error(`✗ ${msg}\n`);
       }
     }
 
@@ -481,15 +574,35 @@ if (isMain) {
       select count(*) as c from product where status = 'draft'`;
     console.log(`\nproducts awaiting classification review (draft): ${draft.c}`);
 
-    await sql.end();
-    if (failed === sources.length && sources.length > 0) process.exit(1);
+    // Tell the website to drop only what changed. Nothing changed → nothing to
+    // clear, and every cached page stays fast. A very large change set (a shop
+    // repricing its whole feed) is cleared in one go instead. Never throws.
+    let cleared = true;
+    if (changed.size === 0) {
+      console.log('no prices changed — site cache left as it is');
+    } else if (changed.size > TARGETED_CLEAR_MAX) {
+      cleared = await clearSiteCache(`ingest: ${changed.size} product ids changed`);
+    } else {
+      cleared = await clearSiteCache(`ingest: ${changed.size} product ids changed`, [...changed]);
+    }
+    if (!cleared) errors.push('site cache clear failed');
 
-    // New prices are in the database — tell the website to drop its cached
-    // copy so visitors see them now rather than within the 1-hour backstop.
-    // Skipped when every source failed (nothing changed). Never throws.
-    await clearSiteCache('ingest finished');
+    const allFailed = failed === sources.length && sources.length > 0;
+    const ok = failed === 0 && cleared;
+    const streak = await finishJob(JOB, ok, errors.join(' | ') || undefined);
+    await sql.end();
+
+    // Railway notifies on a non-zero exit. Every source failing is always
+    // worth an alert; anything less only from the ALERT_AFTER_FAILURES-th
+    // failed run in a row, so a single blip in an hourly job stays quiet.
+    if (allFailed || streak >= ALERT_AFTER_FAILURES) {
+      console.error(`✗ ingest unhealthy (${streak} failed run(s) in a row): ${errors.join(' | ')}`);
+      process.exit(1);
+    }
   })().catch(async (e) => {
     console.error('\ningest failed:', String(e));
+    // Release the running mark and count the failure, so the next hour runs.
+    if (jobStarted) await finishJob(JOB, false, String(e).slice(0, 500)).catch(() => {});
     await sql.end();
     process.exit(1);
   });

@@ -1,6 +1,6 @@
 # Caching & refresh — how scoopt.nl stays fast *and* current
 
-**Status:** branch `feat/cache-refresh-after-ingest` (PR 1 of the site-speed plan).
+**Status:** PR 1 (`feat/cache-refresh-after-ingest`) + PR 3 (`feat/hourly-change-detection`) of the site-speed plan.
 Nothing here is live until the branch is merged into `main` **and** the setup in section 4 is done.
 
 ---
@@ -61,6 +61,32 @@ Errors are never cached: Next.js only stores `200 OK` responses.
 | `backend/src/lib/site-cache.ts` **(new)** | `clearSiteCache()` — calls `POST {SITE_URL}/api/revalidate` with the secret. Never throws; logs loudly if it fails. |
 | `backend/src/ingest/run.ts` | After a successful ingest, calls `clearSiteCache('ingest finished')`. |
 
+## 3b. Hourly ingest with change detection (PR 3)
+
+Every hour the ingest job fetches every source, but only does work for what changed:
+
+1. **One query per source** loads what is already stored (price, shipping, stock, link, EAN).
+2. **eBay** skips the expensive `getItem` call for listings it has seen before and refreshes them from
+   the search results (~90 calls a run instead of ~600; eBay's quota is 5,000 a day). eBay's batch
+   `getItems` would have been cheaper still, but it is a limited release for selected partners.
+3. **Rows identical to what is stored** only get `last_seen_at` moved, in bulk. No transaction, no
+   history row, no classification.
+4. **Changed or new rows** go through the full path (offer, history row, classification).
+5. **Only changed products are cleared on the website**: the job sends their ids to
+   `/api/revalidate`, which clears those product pages/data plus the category listings (which show
+   every product's lowest price). No changes → nothing is cleared. More than `TARGETED_CLEAR_MAX`
+   (500) → one full clear.
+6. **No overlapping runs**: a run marks itself running in `job_state` (db/016); a run that finds a
+   fresh mark exits. A mark older than 50 min (crashed run) is ignored.
+7. **Alerts**: the job exits with an error — Railway emails you — when every source failed, or from
+   the second failed run in a row (a failed source or a failed cache clear). One blip stays quiet.
+
+Tested: unchanged re-ingest writes nothing but `last_seen_at`; a price change marks exactly the
+changed products; job lock and failure streak; against a running site, a targeted clear of product 2
+re-fetched product 2 and the listings but left product 1 cached, and a full clear re-fetched everything.
+**Not yet tested against eBay itself** — the first live run's log shows
+`N searches, N getItem calls, N known listings refreshed from search results`.
+
 ## 4. Setup (after merge)
 
 Secrets are passwords — paste them yourself; never commit them.
@@ -68,6 +94,10 @@ Secrets are passwords — paste them yourself; never commit them.
 1. Create a long random string, e.g. `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
 2. **Vercel → scoopt01 → Settings → Environment Variables:** `REVALIDATE_SECRET` = that string (Production and Preview). Redeploy once.
 3. **Railway → scoopt-ingest-cron → Variables:** `SITE_URL` = `https://scoopt.nl`, `REVALIDATE_SECRET` = the same string.
+4. After PR 3: apply `backend/db/016_job_state.sql`, then set the cron schedule to `17 * * * *`
+   (hourly at :17 — Awin asks feeds not to be pulled on the hour) and `PRICE_GAP_HOURS=3`.
+5. After two good hourly runs: `OFFER_MAX_AGE_HOURS=2` on the Railway `Scoopt` service, so an offer
+   that could not be refreshed for two hours disappears from the site.
 
 ## 5. How to check it works
 

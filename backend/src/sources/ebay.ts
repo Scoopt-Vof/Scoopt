@@ -1,7 +1,7 @@
 import { fetchJson, requireEnv } from '../lib/http';
 import { getAccessToken } from '../lib/oauth';
 import { normaliseEan } from '../lib/ean';
-import type { RetailerSource, FetchResult, RawOffer } from './types';
+import type { RetailerSource, FetchResult, FetchContext, RawOffer } from './types';
 
 /**
  * eBay Browse API adapter — REAL LIVE PRICES, self-service credentials.
@@ -93,7 +93,18 @@ export interface EbayQuery {
   subcategory: string;
 }
 
-interface ItemSummary { itemId: string; title: string; epid?: string }
+interface ItemSummary {
+  itemId: string;
+  title: string;
+  epid?: string;
+  price?: { value?: string; currency?: string };
+  shippingOptions?: { shippingCost?: { value?: string; currency?: string } }[];
+  conditionId?: string;
+  itemWebUrl?: string;
+  /** Present only when the request carries an affiliate campaign id. */
+  itemAffiliateWebUrl?: string;
+  image?: { imageUrl?: string };
+}
 
 /** eBay's condition id for brand-new items. */
 const CONDITION_NEW = '1000';
@@ -153,7 +164,10 @@ export class EbaySource implements RetailerSource {
     });
   }
 
-  async fetch(): Promise<FetchResult> {
+  async fetch(ctx?: FetchContext): Promise<FetchResult> {
+    const knownEans = ctx?.knownEans ?? new Map<string, string>();
+    let detailCalls = 0;
+    let reused = 0;
     const token = await this.token();
     const headers: Record<string, string> = {
       authorization: `Bearer ${token}`,
@@ -189,7 +203,23 @@ export class EbaySource implements RetailerSource {
         if (seenItemIds.has(s.itemId)) continue;
         seenItemIds.add(s.itemId);
 
+        // Seen this listing before? Its EAN is already known, and the search
+        // result carries everything else that can change (price, shipping,
+        // link) — so skip getItem. This is what makes an hourly refresh fit
+        // eBay's 5,000 calls/day: ~90 searches a run instead of ~600 calls.
+        const knownEan = knownEans.get(s.itemId);
+        if (knownEan) {
+          const offer = summaryToRawOffer(s, q, knownEan);
+          if (offer) {
+            reused++;
+            const cur = bestByEan.get(knownEan);
+            if (!cur || deliveredCents(offer) < deliveredCents(cur)) bestByEan.set(knownEan, offer);
+          }
+          continue;
+        }
+
         // The GTIN only exists on getItem — this is the expensive call.
+        detailCalls++;
         const detail = await fetchJson<EbayItem>(
           `${BROWSE}/item/${encodeURIComponent(s.itemId)}`,
           { headers, rateKey: 'ebay', rateLimit: RATE }
@@ -219,6 +249,7 @@ export class EbaySource implements RetailerSource {
       }
     }
     offers.push(...bestByEan.values());
+    console.log(`  [${this.slug}] ${this.queries.length} searches, ${detailCalls} getItem calls, ${reused} known listings refreshed from search results`);
 
     return {
       offers,
@@ -231,6 +262,36 @@ export class EbaySource implements RetailerSource {
 }
 
 const deliveredCents = (o: RawOffer): number => o.priceCents + (o.shippingCents ?? 0);
+
+/**
+ * A listing we already know, rebuilt from its search result. Only fields that
+ * can change are taken from the summary; the product's title, brand, category
+ * and specs were set when it was first seen (first writer wins in ingest).
+ */
+function summaryToRawOffer(s: ItemSummary, q: EbayQuery, ean: string): RawOffer | null {
+  const priceValue = Number(s.price?.value);
+  if (!Number.isFinite(priceValue) || priceValue <= 0) return null;
+  if (s.conditionId && s.conditionId !== CONDITION_NEW) return null;
+  const shippingValue = Number(s.shippingOptions?.[0]?.shippingCost?.value ?? 0);
+  const url = s.itemAffiliateWebUrl ?? s.itemWebUrl;
+  if (!url) return null;
+  return {
+    retailerSku: s.itemId,
+    ean,
+    brand: 'Onbekend',
+    title: s.title,
+    category: q.category,
+    subcategory: q.subcategory,
+    priceCents: Math.round(priceValue * 100),
+    shippingCents: Number.isFinite(shippingValue) ? Math.round(shippingValue * 100) : 0,
+    currency: s.price?.currency ?? 'EUR',
+    // A listing returned by search is live and purchasable.
+    inStock: true,
+    productUrl: url,
+    imageUrl: s.image?.imageUrl ?? null,
+    refreshOnly: true,
+  };
+}
 
 function toRawOffer(item: EbayItem, q: EbayQuery): RawOffer | null {
   const priceValue = Number(item.price?.value);
