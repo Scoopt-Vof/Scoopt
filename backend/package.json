@@ -12,6 +12,7 @@
     "db:migrate": "node --env-file=.env scripts/migrate.mjs",
     "ingest": "tsx --env-file=.env src/ingest/run.ts",
     "ingest:railway": "tsx src/ingest/run.ts ebay-nl ebay-de gsm-net",
+    "retention": "tsx --env-file=.env src/jobs/retention.ts",
     "dev": "tsx watch --env-file=.env src/contract-server.ts",
     "test": "vitest run",
     "test:env": "node --env-file=.env node_modules/vitest/vitest.mjs run",

@@ -87,6 +87,21 @@ re-fetched product 2 and the listings but left product 1 cached, and a full clea
 **Not yet tested against eBay itself** — the first live run's log shows
 `N searches, N getItem calls, N known listings refreshed from search results`.
 
+## 3c. Data retention (PR 4, `feat/data-retention`)
+
+- **eBay has no price history.** eBay's API licence allows copies only "as necessary" (3.1) and
+  forbids deriving historical price data without written permission (8.1(d)). `retailer.keeps_price_history`
+  (db/017) is false for eBay: ingest writes no history rows for it, the price-history API and the
+  "lowest in 30 days" signal ignore it, and the retention job deletes rows stored before. eBay's
+  **current** price is shown as before.
+- **Classification audit log: 90 days**, plus the newest row per product at any age.
+- **eBay raw API responses: 7 days** on the ingest host's disk.
+- Runs **once a day** at the end of an hourly ingest (tracked in `job_state`, job `retention`), or
+  by hand with `npm run retention`.
+- Price history and the audit log stay append-only: UPDATE is always refused; DELETE only inside
+  the retention job's transaction (`set local scoopt.retention = 'on'`).
+- A new source whose terms forbid storing prices sets `keepsPriceHistory = false` in its adapter.
+
 ## 4. Setup (after merge)
 
 Secrets are passwords — paste them yourself; never commit them.

@@ -139,6 +139,8 @@ export class EbaySource implements RetailerSource {
   readonly name: string;
   readonly homepageUrl: string;
   readonly sourceKind = 'official_api' as const;
+  /** eBay API License Agreement 3.1 / 8.1(d): no historical price data. */
+  readonly keepsPriceHistory = false;
 
   constructor(
     private readonly marketplace: EbayMarketplace = 'EBAY_NL',
