@@ -96,6 +96,12 @@ export interface RetailerSource {
   /** Recorded on every ingest_run so provenance is queryable. */
   readonly sourceKind: 'official_api' | 'affiliate_feed' | 'fixture';
   readonly affiliateNetwork?: string;
+  /**
+   * May this source's prices be kept as history? Default true. false (eBay:
+   * its licence forbids deriving historical price data) means only the
+   * current offer is stored — see db/017_retention.sql.
+   */
+  readonly keepsPriceHistory?: boolean;
 
   fetch(ctx?: FetchContext): Promise<FetchResult>;
 }

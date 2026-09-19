@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { sql } from '../lib/db';
 import { clearSiteCache } from '../lib/site-cache';
 import { tryStartJob, finishJob, ALERT_AFTER_FAILURES } from '../lib/job-state';
+import { maybeRunRetention } from '../jobs/retention';
 import { isValidEan13, normaliseEan } from '../lib/ean';
 import { isSanePrice } from '../lib/money';
 import type { RetailerSource, RawOffer } from '../sources/types';
@@ -124,19 +125,20 @@ export async function ingest(
   const deliveryFee = (source as { deliveryFeeCents?: number }).deliveryFeeCents ?? 0;
   const freeAbove = (source as { freeAboveCents?: number | null }).freeAboveCents ?? null;
 
-  const [retailer] = await sql<{ id: number }[]>`
+  const [retailer] = await sql<{ id: number; keeps_price_history: boolean }[]>`
     insert into retailer (slug, name, homepage_url, source_kind, affiliate_network,
-                          delivery_fee_cents, free_above_cents)
+                          delivery_fee_cents, free_above_cents, keeps_price_history)
     values (${source.slug}, ${source.name}, ${source.homepageUrl},
             ${source.sourceKind}, ${source.affiliateNetwork ?? null},
-            ${deliveryFee}, ${freeAbove})
+            ${deliveryFee}, ${freeAbove}, ${source.keepsPriceHistory ?? true})
     on conflict (slug) do update
       set name = excluded.name,
           source_kind = excluded.source_kind,
           affiliate_network = excluded.affiliate_network,
           delivery_fee_cents = excluded.delivery_fee_cents,
-          free_above_cents = excluded.free_above_cents
-    returning id
+          free_above_cents = excluded.free_above_cents,
+          keeps_price_history = excluded.keeps_price_history
+    returning id, keeps_price_history
   `;
 
   const [run] = await sql<{ id: number }[]>`
@@ -277,7 +279,9 @@ export async function ingest(
         // line is still fully recorded, without a row per run. prev_seen_at
         // marks where the previous period ended, so gaps are never drawn as
         // flat lines.
-        if (observationNeeded(prev, raw.priceCents, shippingCents, currency, raw.inStock)) {
+        // Sources whose licence forbids history (eBay) keep only the offer.
+        if (retailer.keeps_price_history &&
+            observationNeeded(prev, raw.priceCents, shippingCents, currency, raw.inStock)) {
           await tx`
             insert into price_observation (product_id, retailer_id, price_cents, shipping_cents,
                                            currency, in_stock, ingest_run_id, prev_seen_at)
@@ -587,8 +591,13 @@ if (isMain) {
     }
     if (!cleared) errors.push('site cache clear failed');
 
+    // Once a day: delete what we may not / need not keep (eBay price history,
+    // classification log older than 90 days, old eBay raw archives).
+    const retentionError = await maybeRunRetention();
+    if (retentionError) errors.push(retentionError);
+
     const allFailed = failed === sources.length && sources.length > 0;
-    const ok = failed === 0 && cleared;
+    const ok = failed === 0 && cleared && !retentionError;
     const streak = await finishJob(JOB, ok, errors.join(' | ') || undefined);
     await sql.end();
 

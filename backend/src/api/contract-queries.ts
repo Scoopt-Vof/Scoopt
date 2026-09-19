@@ -370,6 +370,7 @@ export async function getPriceHistory(id: string): Promise<PriceHistory | null> 
            d.day::date as day, p.total_cents, r.slug
       from periods p
       join retailer r on r.id = p.retailer_id and r.is_active
+                      and r.keeps_price_history   -- eBay: no history (db/017)
       cross join lateral generate_series(
              date_trunc('day', greatest(p.observed_at, now() - interval '30 days')),
              date_trunc('day', greatest(p.ends_at, p.observed_at)),
