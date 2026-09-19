@@ -213,18 +213,18 @@ describe('ingestion behaviour', () => {
     expect(after.c).toBe(before.c);
   });
 
-  it('appends a price observation on every run, even when the price is unchanged', async () => {
+  it('does not append a price observation when nothing changed (history is stored as periods)', async () => {
     const [before] = await sql<{ c: string }[]>`select count(*) as c from price_observation`;
-    await ingest(new TestCatalogueSource());
+    const s = await ingest(new TestCatalogueSource());
     const [after] = await sql<{ c: string }[]>`select count(*) as c from price_observation`;
-    expect(Number(after.c)).toBeGreaterThan(Number(before.c));
+    expect(Number(after.c)).toBe(Number(before.c));
+    expect(s.observationsWritten).toBe(0);
   });
 
   it('records shipping and currency on each observation', async () => {
     const rows = await sql<{ c: string }[]>`
       select count(*) as c from price_observation
-       where ingest_run_id = (select max(id) from ingest_run)
-         and (shipping_cents is null or currency is null)`;
+       where shipping_cents is null or currency is null`;
     expect(Number(rows[0].c)).toBe(0);
   });
 
