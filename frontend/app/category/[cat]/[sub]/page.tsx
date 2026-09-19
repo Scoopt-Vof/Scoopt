@@ -5,8 +5,10 @@ import SubcategoryIntake from "@/components/SubcategoryIntake";
 import { findSubcategory } from "@/lib/subcategories";
 import type { Category } from "@/contract/types";
 
-// Cache the rendered page for 10 minutes (matches CATALOG_REVALIDATE in lib/api.ts).
-export const revalidate = 600;
+// Cache the rendered page. Cleared as soon as the ingest job finishes; 3600
+// seconds (1 h) is only the backstop. Keep in sync with CATALOG_REVALIDATE in
+// lib/catalogCache.ts (Next.js needs a literal number here).
+export const revalidate = 3600;
 
 // No pages are built ahead of time; each one is rendered on its first visit and
 // then served from cache. Without this, Next.js treats the route as fully

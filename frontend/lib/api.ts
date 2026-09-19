@@ -11,6 +11,7 @@ import type {
   Offer, DeliveryRule, PriceHistory, PersonalisedProduct, PersonaliseRequest,
   ShopperProfile, ObservedSignals,
 } from "@/contract/types";
+import { catalogFetchInit } from "@/lib/catalogCache";
 
 // Where the frontend looks for its API. One rule, so dev and production behave
 // the same and the backend's address is never shipped to the browser:
@@ -41,15 +42,11 @@ function resolve(path: string): string {
   return `${base}${path}`;
 }
 
-// Catalogue reads (product, category, category products) are cached by Next.js
-// for CATALOG_REVALIDATE seconds. Prices only change when the ingest job runs,
-// so there is no reason to make every visitor wait on a live backend + database
-// round trip. The "catalog" tag lets an ingest run clear it early with
-// revalidateTag("catalog") if we ever want prices to show up instantly.
-// Anything personal or user-specific (basket, search, personalise, price
-// history) stays uncached below.
-const CATALOG_REVALIDATE = 600; // 10 minutes
-const catalogCache = { next: { revalidate: CATALOG_REVALIDATE, tags: ["catalog"] } };
+// Catalogue reads (product, category, category products, price history) are
+// cached — see lib/catalogCache.ts for how long and how they are cleared.
+// Anything personal or user-specific (basket, search, personalise) stays
+// uncached below.
+const catalogCache = catalogFetchInit;
 
 export async function fetchProduct(id: string): Promise<ProductWithOffers | null> {
   const res = await fetch(resolve(`/api/product/${id}`), catalogCache);
@@ -140,7 +137,7 @@ export async function fetchBasketPlanData(items: string[]): Promise<BasketPlanDa
 
 // Price history for a product — powers "cheapest in 30 days" honest signals.
 export async function fetchPriceHistory(id: string): Promise<PriceHistory | null> {
-  const res = await fetch(resolve(`/api/price-history/${id}`), { cache: "no-store" });
+  const res = await fetch(resolve(`/api/price-history/${id}`), catalogCache);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`fetchPriceHistory failed: ${res.status}`);
   return res.json();

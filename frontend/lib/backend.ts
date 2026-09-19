@@ -14,10 +14,19 @@
 // ============================================================================
 
 import { NextResponse } from "next/server";
+import { catalogFetchInit } from "@/lib/catalogCache";
 
 const BACKEND_URL = process.env.BACKEND_URL?.replace(/\/$/, "");
 
-export async function proxy(path: string, init?: RequestInit): Promise<NextResponse> {
+// `catalog: true` is for GET routes that return shared catalogue data
+// (products, categories, prices). Those responses are cached and cleared when
+// the ingest job finishes — see lib/catalogCache.ts. Leave it off for anything
+// personal (basket, personalise, tracking): those must never be cached.
+export async function proxy(
+  path: string,
+  init?: RequestInit,
+  opts: { catalog?: boolean } = {}
+): Promise<NextResponse> {
   if (!BACKEND_URL) {
     // Loud, not silent. A missing env var must never degrade into fake data.
     console.error("BACKEND_URL is not set — refusing to serve data.");
@@ -25,7 +34,10 @@ export async function proxy(path: string, init?: RequestInit): Promise<NextRespo
   }
 
   try {
-    const res = await fetch(`${BACKEND_URL}${path}`, { ...init, cache: "no-store" });
+    const res = await fetch(
+      `${BACKEND_URL}${path}`,
+      opts.catalog ? { ...init, ...catalogFetchInit } : { ...init, cache: "no-store" }
+    );
     const body = await res.text();
     return new NextResponse(body, {
       status: res.status,
