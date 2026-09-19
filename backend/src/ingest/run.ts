@@ -7,7 +7,7 @@ import { isSanePrice } from '../lib/money';
 import type { RetailerSource, RawOffer } from '../sources/types';
 import { resolveSources, printSources } from '../sources/registry';
 import {
-  createClassifier, persistClassification, type Classifier,
+  createClassifier, persistClassification, alreadyClassified, type Classifier,
 } from '../categorisation/index';
 
 /**
@@ -16,7 +16,8 @@ import {
  *   1. acquire    — ask the source for its payload
  *   2. archive    — write the raw payload to disk BEFORE parsing it
  *   3. normalise  — validate, convert, reject junk into the review queue
- *   4. match+store— upsert product + offer, APPEND price_observation
+ *   4. match+store— upsert product + offer, append price_observation when
+ *                   the price changed (history is stored as periods, see 015)
  *
  * Stage 2 is the one people skip and regret. If normalisation has a bug you
  * discover in three weeks, an archived payload lets you replay history. Without
@@ -33,6 +34,8 @@ export interface IngestSummary {
   queuedForReview: number;
   /** Placed on the tree with enough confidence to publish. */
   classified: number;
+  /** Classified before with identical inputs — nothing written. */
+  classificationsUnchanged: number;
 }
 
 export interface IngestOptions {
@@ -139,6 +142,7 @@ export async function ingest(
   let observationsWritten = 0;
   let queuedForReview = 0;
   let classified = 0;
+  let classificationsUnchanged = 0;
 
   try {
     // ---- 1. acquire ------------------------------------------------------
@@ -214,6 +218,17 @@ export async function ingest(
           returning id
         `;
 
+        // What we knew about this offer before this run — used to decide
+        // whether history needs a new row (see 015_price_observation_on_change).
+        const [prev] = await tx<{
+          price_cents: number; shipping_cents: number; currency: string;
+          in_stock: boolean; last_seen_at: Date;
+        }[]>`
+          select price_cents, shipping_cents, currency, in_stock, last_seen_at
+            from offer
+           where product_id = ${row.id} and retailer_id = ${retailer.id}
+           for update`;
+
         // The offer is mutable current state...
         await tx`
           insert into offer (product_id, retailer_id, retailer_sku, price_cents,
@@ -230,22 +245,27 @@ export async function ingest(
                 last_seen_at   = now()
         `;
 
-        // ...price_observation is the permanent record. Every run, every product,
-        // unconditionally. Never conditional on "did the price change" — a flat
-        // line is information, and gaps make a chart lie. Shipping and currency
-        // are recorded (013) so history compares on the same delivered basis as
-        // the current price.
-        await tx`
-          insert into price_observation (product_id, retailer_id, price_cents, shipping_cents,
-                                         currency, in_stock, ingest_run_id)
-          values (${row.id}, ${retailer.id}, ${raw.priceCents}, ${shippingCents},
-                  ${currency}, ${raw.inStock}, ${run.id})
-        `;
+        // ...price_observation is the permanent record of CHANGES. A row is
+        // appended when the offer is new, when anything a shopper pays or sees
+        // changed, or after a gap (the offer was not seen for PRICE_GAP_HOURS,
+        // e.g. it left the feed and came back). Otherwise the existing row
+        // still describes the price and offer.last_seen_at extends it — a flat
+        // line is still fully recorded, without a row per run. prev_seen_at
+        // marks where the previous period ended, so gaps are never drawn as
+        // flat lines.
+        if (observationNeeded(prev, raw.priceCents, shippingCents, currency, raw.inStock)) {
+          await tx`
+            insert into price_observation (product_id, retailer_id, price_cents, shipping_cents,
+                                           currency, in_stock, ingest_run_id, prev_seen_at)
+            values (${row.id}, ${retailer.id}, ${raw.priceCents}, ${shippingCents},
+                    ${currency}, ${raw.inStock}, ${run.id}, ${prev?.last_seen_at ?? null})
+          `;
+          observationsWritten++;
+        }
         return row.id;
       });
       const product = { id: productId };
       offersUpserted++;
-      observationsWritten++;
 
       // ---- 5. classify --------------------------------------------------
       // Runs AFTER validate() and BEFORE publication. Never blocks and never
@@ -279,9 +299,16 @@ export async function ingest(
             specs: raw.specs,
             condition: raw.condition ?? null,
           });
-          await persistClassification(sql, classifier.taxonomy, result, { ingestRunId: run.id });
-          if (result.categoryId && !result.needsReview) classified++;
-          else queuedForReview++;
+          // Same product, same inputs, same classifier → same answer. Writing it
+          // again would only add a duplicate audit row per product per run
+          // (~10 MB a run at GSM Net's size), so skip the write entirely.
+          if (await alreadyClassified(sql, product.id, result.inputHash)) {
+            classificationsUnchanged++;
+          } else {
+            await persistClassification(sql, classifier.taxonomy, result, { ingestRunId: run.id });
+            if (result.categoryId && !result.needsReview) classified++;
+            else queuedForReview++;
+          }
         } catch (err) {
           // A classifier fault must not cost the price data. The product stays
           // draft, which is the safe state, and the error is visible.
@@ -311,7 +338,7 @@ export async function ingest(
 
   return {
     runId: run.id, productsSeen, offersUpserted, observationsWritten,
-    queuedForReview, classified,
+    queuedForReview, classified, classificationsUnchanged,
   };
 }
 
@@ -327,6 +354,31 @@ function defaultSourceKey(retailerSlug: string): string | null {
   if (retailerSlug === 'knivesandtools') return 'knivesandtools';
   if (retailerSlug === 'bruno-bed') return 'bruno-bed';
   return null;
+}
+
+/**
+ * After how long without being seen an unchanged offer still gets a new
+ * history row, so the gap shows. Must be longer than the time between ingest
+ * runs (26 h suits the daily run; lower it to ~3 h once ingest runs hourly).
+ */
+export const PRICE_GAP_HOURS = (() => {
+  const n = Number(process.env.PRICE_GAP_HOURS ?? 26);
+  return Number.isFinite(n) && n > 0 ? n : 26;
+})();
+
+/** Does this run need a new price_observation row for this offer? */
+export function observationNeeded(
+  prev: { price_cents: number; shipping_cents: number; currency: string;
+          in_stock: boolean; last_seen_at: Date } | undefined,
+  priceCents: number, shippingCents: number, currency: string, inStock: boolean,
+  now: Date = new Date(),
+): boolean {
+  if (!prev) return true;
+  if (prev.price_cents !== priceCents) return true;
+  if (prev.shipping_cents !== shippingCents) return true;
+  if (prev.currency.trim().toUpperCase() !== currency) return true;
+  if (prev.in_stock !== inStock) return true;
+  return now.getTime() - new Date(prev.last_seen_at).getTime() > PRICE_GAP_HOURS * 3_600_000;
 }
 
 /** Returns a rejection reason, or null if the row is good. */
@@ -393,7 +445,7 @@ if (isMain) {
         console.log(
           `✓ ${source.slug}: ${s.productsSeen} seen, ${s.offersUpserted} offers, ` +
           `${s.observationsWritten} observations, ${s.classified} classified, ` +
-          `${s.queuedForReview} queued ` +
+          `${s.queuedForReview} queued, ${s.classificationsUnchanged} unchanged ` +
           `(${((Date.now() - started) / 1000).toFixed(1)}s)\n`
         );
       } catch (e) {
